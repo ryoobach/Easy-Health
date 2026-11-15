@@ -10,8 +10,8 @@ android {
         applicationId = "com.ryoo.easyhealth"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.08"
+        versionCode = 10
+        versionName = "1.09"
     }
     buildFeatures {
         compose = true
