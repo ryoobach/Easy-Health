@@ -166,8 +166,12 @@ fun EasyHealthApp(context: Context) {
     if (selectedPerson !in people) selectedPerson = people.first()
     val enabledDevices = remember {
         mutableStateListOf<String>().apply {
-            val a = JSONArray(prefs.getString("enabled_devices", "[\"Contour Plus ONE\",\"CareSens Dual\"]") ?: "[]")
+            val a = JSONArray(prefs.getString("enabled_devices", "[\"Contour Plus ONE\",\"CareSens Dual\",\"생활 기록\"]") ?: "[]")
             for (i in 0 until a.length()) add(a.optString(i))
+            if (!prefs.getBoolean("lifestyle_default_migrated", false)) {
+                if (!contains("생활 기록")) add("생활 기록")
+                prefs.edit().putString("enabled_devices", JSONArray(this).toString()).putBoolean("lifestyle_default_migrated", true).apply()
+            }
         }
     }
     var tab by remember { mutableStateOf("기록") }
@@ -439,7 +443,7 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
-                        activeTypes.filter { it !in listOf("혈당", "혈압") }.forEach { type ->
+                        activeTypes.filter { it !in listOf("혈당", "혈압", "식사", "운동", "수면", "특이사항") }.forEach { type ->
                             val rows = periodRecords.filter { it.type == type }
                             val values = rows.mapNotNull { it.value.toDoubleOrNull() }
                             val unit = units[type] ?: ""
