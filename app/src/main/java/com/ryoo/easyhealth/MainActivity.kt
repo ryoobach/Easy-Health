@@ -52,7 +52,7 @@ private val Green = Color(0xFF16834A)
 private val PaleGreen = Color(0xFFEAF5ED)
 private val Ink = Color(0xFF183326)
 
-private val vitalTypes = listOf("혈당", "케톤", "혈압", "체온", "호흡수", "산소포화도", "체중", "체지방률", "골격근량", "BMI", "심전도", "식사", "운동", "수면", "특이사항")
+private val vitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항")
 private val units = mapOf("혈당" to "mg/dL", "케톤" to "mmol/L", "혈압" to "mmHg", "체온" to "℃", "호흡수" to "회/분", "산소포화도" to "%", "체중" to "kg", "체지방률" to "%", "골격근량" to "kg", "BMI" to "", "심전도" to "", "식사" to "", "운동" to "", "수면" to "", "특이사항" to "")
 private val devices = listOf(
     "Contour Plus ONE" to listOf("혈당"),
@@ -287,12 +287,27 @@ fun EasyHealthApp(context: Context) {
                                         }
                                     }
                                 }
-                                val orderedTypes = listOf("체온", "체중") + activeTypes.filter { it !in listOf("혈당", "혈압", "수축기 혈압", "이완기 혈압", "맥박", "체온", "체중", "식사", "운동", "수면", "특이사항") }
+                                val scaleTypes = listOf("체중", "체지방률", "골격근량", "BMI")
+                                if (scaleTypes.any { activeTypes.contains(it) }) {
+                                    Card(Modifier.width(178.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
+                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                            Text("체중계 측정값", color = Ink, fontWeight = FontWeight.SemiBold)
+                                            scaleTypes.filter { activeTypes.contains(it) }.forEach { scaleType ->
+                                                val latest = personRecords.firstOrNull { it.type == scaleType }
+                                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(if (scaleType == "체중") "몸무게" else scaleType, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                                    Text((latest?.value ?: "--") + (units[scaleType]?.let { " $it" } ?: ""), color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                val orderedTypes = listOf("체온", "호흡수", "산소포화도", "심전도", "케톤") + activeTypes.filter { it !in listOf("혈당", "케톤", "혈압", "수축기 혈압", "이완기 혈압", "맥박", "체온", "체중", "체지방률", "골격근량", "BMI", "식사", "운동", "수면", "특이사항") }
                                 orderedTypes.distinct().filter { activeTypes.contains(it) }.forEach { vital ->
                                     val latest = personRecords.firstOrNull { it.type == vital }
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Text(if (vital == "체중") "몸무게" else vital, color = Ink, fontWeight = FontWeight.SemiBold)
+                                            Text(vital, color = Ink, fontWeight = FontWeight.SemiBold)
                                             Text(latest?.value ?: "--", color = Green, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                                             Text(units[vital] ?: "", color = Green, fontSize = 11.sp)
                                             Text(latest?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 10.sp)
@@ -693,8 +708,25 @@ private fun RecordDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                 Text("측정 항목", color = Ink, fontWeight = FontWeight.SemiBold)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    vitalTypes.forEach { item -> FilterChip(selected = type == item, onClick = { type = item }, label = { Text(item, fontSize = 12.sp) }) }
+                val inputGroups = listOf(
+                    "혈당계" to listOf("혈당"),
+                    "혈압계" to listOf("혈압"),
+                    "체온계" to listOf("체온"),
+                    "체중계" to listOf("체중", "체지방률", "골격근량", "BMI"),
+                    "기타 바이탈" to listOf("호흡수", "산소포화도", "심전도"),
+                    "케톤 측정" to listOf("케톤"),
+                    "생활 기록" to listOf("식사", "운동", "수면", "특이사항")
+                )
+                inputGroups.forEach { (groupName, groupTypes) ->
+                    Text(groupName, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        groupTypes.filter { it in vitalTypes }.forEach { item ->
+                            FilterChip(selected = type == item, onClick = { type = item }, label = { Text(item, fontSize = 12.sp) })
+                        }
+                    }
+                }
+                if (type == "혈당") {
+                    Text("당화혈색소 추정치는 최근 혈당 기록을 바탕으로 자동 계산됩니다.", color = Color.Gray, fontSize = 11.sp)
                 }
                 if (type == "혈압") {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
