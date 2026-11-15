@@ -32,4 +32,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: 이지헬스-1.09
-          path: "이지헬스 1.08.apk"
+          path: "이지헬스 1.09.apk"
