@@ -71,11 +71,11 @@ data class VitalRecord(
 )
 
 
-data class HospitalAppointment(val id: Int, val hospital: String, val date: String, val time: String, val memo: String)
+data class HospitalAppointment(val id: Int, val hospital: String, val date: String, val time: String, val memo: String, val status: String = "예정")
 
 private fun saveAppointments(context: Context, appointments: List<HospitalAppointment>) {
     val array = JSONArray()
-    appointments.forEach { a -> array.put(JSONObject().put("id", a.id).put("hospital", a.hospital).put("date", a.date).put("time", a.time).put("memo", a.memo)) }
+    appointments.forEach { a -> array.put(JSONObject().put("id", a.id).put("hospital", a.hospital).put("date", a.date).put("time", a.time).put("memo", a.memo).put("status", a.status)) }
     context.getSharedPreferences("easy_health", Context.MODE_PRIVATE).edit().putString("appointments", array.toString()).apply()
 }
 private fun scheduleAppointmentReminder(context: Context, a: HospitalAppointment) {
@@ -169,12 +169,13 @@ fun EasyHealthApp(context: Context) {
         mutableStateListOf<HospitalAppointment>().apply {
             try {
                 val a = JSONArray(prefs.getString("appointments", "[]") ?: "[]")
-                for (i in 0 until a.length()) { val o = a.getJSONObject(i); add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"))) }
+                for (i in 0 until a.length()) { val o = a.getJSONObject(i); add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"), o.optString("status", "예정")))) }
             } catch (_: Exception) { }
         }
     }
     var showAppointmentDialog by remember { mutableStateOf(false) }
     var editingAppointment by remember { mutableStateOf<HospitalAppointment?>(null) }
+    var appointmentSection by remember { mutableStateOf("예정 일정") }
     var showRecordDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<VitalRecord?>(null) }
     var showPeopleDialog by remember { mutableStateOf(false) }
@@ -294,18 +295,33 @@ fun EasyHealthApp(context: Context) {
                     Button(onClick = { editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("병원 일정 추가")
                     }
-                    if (appointments.isEmpty()) Text("등록된 병원 일정이 없습니다.", color = Color.Gray)
-                    else appointments.sortedBy { it.date + " " + it.time }.forEach { a ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("예정 일정", "지난 일정").forEach { section ->
+                            FilterChip(selected = appointmentSection == section, onClick = { appointmentSection = section }, label = { Text(section) })
+                        }
+                    }
+                    val nowForAppointments = System.currentTimeMillis()
+                    val appointmentDateFormat = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA)
+                    val visibleAppointments = appointments.filter { a ->
+                        val whenAt = try { appointmentDateFormat.parse("${a.date} ${a.time}")?.time ?: 0L } catch (_: Exception) { 0L }
+                        if (appointmentSection == "예정 일정") whenAt >= nowForAppointments else whenAt < nowForAppointments
+                    }.sortedBy { it.date + " " + it.time }
+                    if (visibleAppointments.isEmpty()) Text(if (appointmentSection == "예정 일정") "예정된 병원 일정이 없습니다." else "지난 병원 일정이 없습니다.", color = Color.Gray)
+                    else visibleAppointments.forEach { a ->
                         Card(modifier = Modifier.fillMaxWidth().clickable { editingAppointment = a; showAppointmentDialog = true },
                             colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
-                                Text("\${a.date} \${a.time}", color = Green, fontWeight = FontWeight.Bold)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                    Text(a.status, color = if (a.status == "예정") Green else Color.Gray, fontSize = 12.sp)
+                                }
+                                Text("${a.date} ${a.time}", color = Green, fontWeight = FontWeight.Bold)
                                 if (a.memo.isNotBlank()) Text(a.memo, color = Color.Gray, fontSize = 12.sp)
                             }
                         }
                     }
-                    Text("일정을 누르면 수정하거나 삭제할 수 있습니다. 알림 권한을 허용해 주세요.", color = Color.Gray, fontSize = 11.sp)
+                    Text("지난 일정도 자동으로 보관됩니다. 일정을 누르면 내용을 수정하거나 진료 상태를 기록하고 삭제할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
+
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("$selectedPerson 건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
@@ -437,12 +453,12 @@ fun EasyHealthApp(context: Context) {
 
     if (showAppointmentDialog) {
         AppointmentDialog(existing = editingAppointment, onDismiss = { showAppointmentDialog = false },
-            onSave = { hospital, date, time, memo ->
+            onSave = { hospital, date, time, memo, status ->
                 val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
                 val parsed = try { fmt.parse("$date $time") } catch (_: Exception) { null }
-                if (hospital.isNotBlank() && parsed != null && parsed.time > System.currentTimeMillis()) {
+                if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || parsed.time > System.currentTimeMillis())) {
                     editingAppointment?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
-                    val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo)
+                    val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, status)
                     appointments.add(saved); saveAppointments(context, appointments); scheduleAppointmentReminder(context, saved)
                     if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                         (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 701)
@@ -554,12 +570,14 @@ private fun RecordDialog(
 
 @Composable
 private fun AppointmentDialog(existing: HospitalAppointment?, onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit, onDelete: (HospitalAppointment) -> Unit) {
+    onSave: (String, String, String, String, String) -> Unit, onDelete: (HospitalAppointment) -> Unit) {
     val context = LocalContext.current
     var hospital by remember(existing) { mutableStateOf(existing?.hospital ?: "") }
     var date by remember(existing) { mutableStateOf(existing?.date ?: SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(System.currentTimeMillis() + 86400000L))) }
     var time by remember(existing) { mutableStateOf(existing?.time ?: "09:00") }
     var memo by remember(existing) { mutableStateOf(existing?.memo ?: "") }
+    var status by remember(existing) { mutableStateOf(existing?.status ?: "예정") }
+    var statusMenu by remember { mutableStateOf(false) }
 
     fun showDatePicker() {
         val calendar = java.util.Calendar.getInstance()
@@ -598,10 +616,20 @@ private fun AppointmentDialog(existing: HospitalAppointment?, onDismiss: () -> U
                 }
             }
             OutlinedTextField(value = memo, onValueChange = { memo = it }, label = { Text("진료 내용 / 메모") }, singleLine = true)
+            if (existing != null) {
+                Box {
+                    OutlinedButton(onClick = { statusMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("진료 상태: $status") }
+                    DropdownMenu(expanded = statusMenu, onDismissRequest = { statusMenu = false }) {
+                        listOf("예정", "진료 완료", "미방문", "취소").forEach { option ->
+                            DropdownMenuItem(text = { Text(option) }, onClick = { status = option; statusMenu = false })
+                        }
+                    }
+                }
+            }
             Text("달력과 시계 아이콘을 누르면 날짜와 시간을 선택할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
             Text("저장하면 지정한 날짜와 시간에 알림을 설정합니다.", color = Color.Gray, fontSize = 11.sp)
             if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("일정 삭제", color = Color.Red) }
         } },
-        confirmButton = { TextButton(onClick = { if (hospital.isNotBlank()) onSave(hospital.trim(), date.trim(), time.trim(), memo.trim()) }) { Text("저장") } },
+        confirmButton = { TextButton(onClick = { if (hospital.isNotBlank()) onSave(hospital.trim(), date.trim(), time.trim(), memo.trim(), status) }) { Text("저장") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
 }
