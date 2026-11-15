@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -49,11 +50,11 @@ private val Green = Color(0xFF16834A)
 private val PaleGreen = Color(0xFFEAF5ED)
 private val Ink = Color(0xFF183326)
 
-private val vitalTypes = listOf("혈당", "수축기 혈압", "이완기 혈압", "맥박", "체온", "호흡수", "산소포화도", "체중", "체지방률", "골격근량", "BMI", "심전도")
-private val units = mapOf("혈당" to "mg/dL", "수축기 혈압" to "mmHg", "이완기 혈압" to "mmHg", "맥박" to "bpm", "체온" to "℃", "호흡수" to "회/분", "산소포화도" to "%", "체중" to "kg", "체지방률" to "%", "골격근량" to "kg", "BMI" to "", "심전도" to "")
+private val vitalTypes = listOf("혈당", "케톤", "수축기 혈압", "이완기 혈압", "맥박", "체온", "호흡수", "산소포화도", "체중", "체지방률", "골격근량", "BMI", "심전도")
+private val units = mapOf("혈당" to "mg/dL", "케톤" to "mmol/L", "수축기 혈압" to "mmHg", "이완기 혈압" to "mmHg", "맥박" to "bpm", "체온" to "℃", "호흡수" to "회/분", "산소포화도" to "%", "체중" to "kg", "체지방률" to "%", "골격근량" to "kg", "BMI" to "", "심전도" to "")
 private val devices = listOf(
     "Contour Plus ONE" to listOf("혈당"),
-    "CareSens Dual" to listOf("혈당"),
+    "CareSens Dual" to listOf("혈당", "케톤"),
     "혈압계" to listOf("수축기 혈압", "이완기 혈압", "맥박"),
     "체중계" to listOf("체중", "체지방률", "골격근량", "BMI"),
     "체온계" to listOf("체온"),
@@ -240,14 +241,29 @@ fun EasyHealthApp(context: Context) {
             when (tab) {
                 "기록" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                            Text("최근 혈당 · $selectedPerson", color = Ink, fontWeight = FontWeight.SemiBold)
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(latestGlucose?.value ?: "--", fontSize = 48.sp, color = Green, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.width(8.dp))
-                                Text("mg/dL", color = Green, modifier = Modifier.padding(bottom = 8.dp))
+                        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("$selectedPerson 건강 상태", color = Ink, fontWeight = FontWeight.SemiBold)
+                            val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
+                            if (activeTypes.contains("혈당")) {
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(glucoseRecord?.value ?: "--", fontSize = 48.sp, color = Green, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("mg/dL", color = Green, modifier = Modifier.padding(bottom = 8.dp))
+                                }
+                                Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "혈당 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                             }
-                            Text(latestGlucose?.let { dateFormat.format(Date(it.timestamp)) } ?: "아직 혈당 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                            activeTypes.filter { it != "혈당" }.forEach { vital ->
+                                val latest = personRecords.firstOrNull { it.type == vital }
+                                HorizontalDivider(color = Color(0xFFE8EEE9))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(vital, color = Ink, fontWeight = FontWeight.SemiBold)
+                                        Text(latest?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 11.sp)
+                                    }
+                                    Text(latest?.let { it.value + (units[vital]?.let { u -> if (u.isNotBlank()) " $u" else "" } ?: "") } ?: "--", color = Green, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            if (activeTypes.isEmpty()) Text("기기 설정에서 표시할 바이탈 항목을 선택해 주세요.", color = Color.Gray, fontSize = 12.sp)
                         }
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
@@ -490,8 +506,7 @@ fun EasyHealthApp(context: Context) {
         )
     }
     if (showRecordDialog) {
-        RecordDialog(selectedPerson, editing, onDismiss = { showRecordDialog = false }, onSave = { type, value, note, source ->
-            val timestamp = editing?.timestamp ?: System.currentTimeMillis()
+        RecordDialog(selectedPerson, editing, onDismiss = { showRecordDialog = false }, onSave = { type, value, note, source, timestamp ->
             val candidate = VitalRecord(editing?.id ?: UUID.randomUUID().toString(), selectedPerson, type, value, timestamp, source, note, editing?.externalId ?: "")
             val duplicate = records.any { old ->
                 old.id != candidate.id && old.person == candidate.person && old.type == candidate.type &&
@@ -556,38 +571,55 @@ private fun RecordDialog(
     person: String,
     existing: VitalRecord?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit,
+    onSave: (String, String, String, String, Long) -> Unit,
     onDelete: (VitalRecord) -> Unit
 ) {
+    val context = LocalContext.current
     var type by remember(existing) { mutableStateOf(existing?.type ?: "혈당") }
     var value by remember(existing) { mutableStateOf(existing?.value ?: "") }
     var note by remember(existing) { mutableStateOf(existing?.note ?: "") }
     var source by remember(existing) { mutableStateOf(existing?.source ?: "직접 입력") }
-    var menu by remember { mutableStateOf(false) }
+    var measuredDate by remember(existing) { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(existing?.timestamp ?: System.currentTimeMillis()))) }
+    var measuredTime by remember(existing) { mutableStateOf(SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(existing?.timestamp ?: System.currentTimeMillis()))) }
+    fun showDatePicker() {
+        val calendar = java.util.Calendar.getInstance()
+        try { SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(measuredDate)?.let { calendar.time = it } } catch (_: Exception) { }
+        DatePickerDialog(context, { _, year, month, day -> measuredDate = String.format(Locale.KOREA, "%04d.%02d.%02d", year, month + 1, day) }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH), calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
+    }
+    fun showTimePicker() {
+        val parts = measuredTime.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 0
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        TimePickerDialog(context, { _, h, m -> measuredTime = String.format(Locale.KOREA, "%02d:%02d", h, m) }, hour, minute, true).show()
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "$person 측정 기록 추가" else "측정 기록 수정") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box {
-                    OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) { Text("측정 항목: $type") }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        vitalTypes.forEach { item -> DropdownMenuItem(text = { Text(item) }, onClick = { type = item; menu = false }) }
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                Text("측정 항목", color = Ink, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    vitalTypes.forEach { item -> FilterChip(selected = type == item, onClick = { type = item }, label = { Text(item, fontSize = 12.sp) }) }
                 }
-                OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("측정값 ${units[type]?.let { "($it)" } ?: ""}") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
-                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("메모 (선택)") }, singleLine = true)
+                OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("측정값 ${units[type]?.let { "($it)" } ?: ""}") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = measuredDate, onValueChange = { measuredDate = it }, label = { Text("측정 날짜") }, singleLine = true, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "달력에서 날짜 선택", tint = Green) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(value = measuredTime, onValueChange = { measuredTime = it }, label = { Text("측정 시간") }, singleLine = true, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시계에서 시간 선택", tint = Green) }
+                }
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("메모 (선택)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("측정 대상: $person", color = Color.Gray, fontSize = 12.sp)
-                Text("기록 시각: " + SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(Date(existing?.timestamp ?: System.currentTimeMillis())),
-                    color = Color.Gray, fontSize = 11.sp)
                 if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("이 기록 삭제", color = Color.Red) }
             }
         },
         confirmButton = { TextButton(onClick = {
-            if (value.trim().isNotEmpty()) onSave(type, value.trim(), note.trim(), source)
+            val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
+            val timestamp = try { fmt.parse("$measuredDate $measuredTime")?.time } catch (_: Exception) { null }
+            if (value.trim().isNotEmpty() && timestamp != null) onSave(type, value.trim(), note.trim(), source, timestamp)
         }) { Text("저장") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
 }
-
 
 @Composable
 private fun AppointmentDialog(existing: HospitalAppointment?, onDismiss: () -> Unit,
