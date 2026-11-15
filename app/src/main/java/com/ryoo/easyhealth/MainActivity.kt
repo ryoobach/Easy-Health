@@ -8,6 +8,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -119,7 +121,7 @@ private fun persistRecords(context: Context, records: List<VitalRecord>) {
         .edit().putString("vital_records", encodeRecords(records)).apply()
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EasyHealthApp(context: Context) {
     val prefs = remember { context.getSharedPreferences("easy_health", Context.MODE_PRIVATE) }
@@ -176,6 +178,7 @@ fun EasyHealthApp(context: Context) {
     var showAppointmentDialog by remember { mutableStateOf(false) }
     var editingAppointment by remember { mutableStateOf<HospitalAppointment?>(null) }
     var appointmentSection by remember { mutableStateOf("예정 일정") }
+    var appointmentDeleteTarget by remember { mutableStateOf<HospitalAppointment?>(null) }
     var showRecordDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<VitalRecord?>(null) }
     var showPeopleDialog by remember { mutableStateOf(false) }
@@ -308,8 +311,10 @@ fun EasyHealthApp(context: Context) {
                     }.sortedBy { it.date + " " + it.time }
                     if (visibleAppointments.isEmpty()) Text(if (appointmentSection == "예정 일정") "예정된 병원 일정이 없습니다." else "지난 병원 일정이 없습니다.", color = Color.Gray)
                     else visibleAppointments.forEach { a ->
-                        Card(modifier = Modifier.fillMaxWidth().clickable { editingAppointment = a; showAppointmentDialog = true },
-                            colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                        Card(modifier = Modifier.fillMaxWidth().combinedClickable(
+                            onClick = { editingAppointment = a; showAppointmentDialog = true },
+                            onLongClick = { appointmentDeleteTarget = a }
+                        ), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -320,7 +325,7 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                     }
-                    Text("지난 일정도 자동으로 보관됩니다. 일정을 누르면 내용을 수정하거나 진료 상태를 기록하고 삭제할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
+                    Text("짧게 누르면 수정, 길게 누르면 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
 
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -465,7 +470,23 @@ fun EasyHealthApp(context: Context) {
                     showAppointmentDialog = false
                 }
             },
-            onDelete = { a -> cancelAppointmentReminder(context, a.id); appointments.removeAll { it.id == a.id }; saveAppointments(context, appointments); showAppointmentDialog = false }
+            onDelete = { a -> appointmentDeleteTarget = a; showAppointmentDialog = false }
+        )
+    }
+    appointmentDeleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { appointmentDeleteTarget = null },
+            title = { Text("병원 일정 삭제") },
+            text = { Text("${target.hospital} 일정(${target.date} ${target.time})을 삭제하시겠습니까? 삭제한 일정은 복구할 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    cancelAppointmentReminder(context, target.id)
+                    appointments.removeAll { it.id == target.id }
+                    saveAppointments(context, appointments)
+                    appointmentDeleteTarget = null
+                }) { Text("삭제", color = Color.Red) }
+            },
+            dismissButton = { TextButton(onClick = { appointmentDeleteTarget = null }) { Text("취소") } }
         )
     }
     if (showRecordDialog) {
