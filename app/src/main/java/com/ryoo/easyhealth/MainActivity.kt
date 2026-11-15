@@ -139,6 +139,8 @@ fun EasyHealthApp(context: Context) {
     var newPerson by remember { mutableStateOf("") }
     var showDeviceInfo by remember { mutableStateOf(false) }
     var showAppInfo by remember { mutableStateOf(false) }
+    var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
+    var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
     var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "주간") ?: "주간") }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
@@ -163,21 +165,18 @@ fun EasyHealthApp(context: Context) {
                         Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink)
                     }
                 }, actions = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                        TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
-                            Text(selectedPerson + " ▾", color = Green, fontSize = 10.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
                         }
-                        TextButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, contentPadding = PaddingValues(horizontal = 3.dp)) {
-                            Icon(Icons.Default.Home, contentDescription = "홈", modifier = Modifier.size(16.dp))
-                            Text("홈", fontSize = 10.sp)
+                        IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }) {
+                            Icon(Icons.Default.Home, contentDescription = "홈", tint = Green)
                         }
-                        TextButton(onClick = { showAppInfo = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
-                            Icon(Icons.Default.Info, contentDescription = "앱정보", modifier = Modifier.size(16.dp))
-                            Text("앱정보", fontSize = 10.sp)
+                        IconButton(onClick = { showAppInfo = true }) {
+                            Icon(Icons.Default.Info, contentDescription = "앱정보", tint = Green)
                         }
-                        TextButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }, contentPadding = PaddingValues(horizontal = 3.dp)) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "앱종료", modifier = Modifier.size(16.dp))
-                            Text("앱종료", fontSize = 10.sp)
+                        IconButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = "앱종료", tint = Green)
                         }
                     }
                 }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF4F8F5)))
@@ -314,6 +313,45 @@ fun EasyHealthApp(context: Context) {
         }
     }
 
+    if (showOwnerSetup) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Easy Health 사용자 이름") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("휴대폰은 소유자 이름을 앱에 자동으로 알려주지 않습니다. 기록에 표시할 이름을 입력해 주세요.")
+                    OutlinedTextField(
+                        value = ownerNameInput,
+                        onValueChange = { ownerNameInput = it },
+                        label = { Text("내 이름") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = ownerNameInput.trim()
+                    if (name.isNotBlank()) {
+                        val oldName = prefs.getString("owner_name", null)
+                        if (oldName == null && people.contains("본인")) {
+                            val index = people.indexOf("본인")
+                            if (index >= 0) people[index] = name
+                            records.indices.forEach { i ->
+                                if (records[i].person == "본인") records[i] = records[i].copy(person = name)
+                            }
+                            persistRecords(context, records)
+                            prefs.edit().putString("people", JSONArray(people).toString()).apply()
+                        }
+                        prefs.edit().putString("owner_name", name).putString("selected_person", name).apply()
+                        if (!people.contains(name)) people.add(name)
+                        selectedPerson = name
+                        showOwnerSetup = false
+                    }
+                }) { Text("저장") }
+            }
+        )
+    }
+
     if (showAppInfo) {
         Dialog(onDismissRequest = { showAppInfo = false }) {
             Surface(
@@ -327,7 +365,7 @@ fun EasyHealthApp(context: Context) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(Icons.Default.Favorite, contentDescription = null, tint = Green, modifier = Modifier.size(42.dp))
-                    Text("Easy Health 1.01", color = Ink, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                    Text("Easy Health ${BuildConfig.VERSION_NAME}", color = Ink, fontWeight = FontWeight.Bold, fontSize = 19.sp)
                     Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp)
                     Text("AI 개발 협력: ChatGPT (OpenAI)", color = Color.Gray, fontSize = 11.sp)
                     Text("화면을 터치하면 닫힙니다.", color = Color.Gray, fontSize = 10.sp)
