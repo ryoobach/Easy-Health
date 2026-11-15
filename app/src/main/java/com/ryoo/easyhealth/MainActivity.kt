@@ -118,6 +118,31 @@ fun EasyHealthApp(context: Context) {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("건강 리포트", fontWeight = FontWeight.Bold, color = Ink, fontSize = 20.sp)
+                            Text("측정 바이탈 전체 항목", color = Ink, fontWeight = FontWeight.SemiBold)
+                            val vitalRows = listOf(
+                                "혈당" to (periodAverage?.let { "${it.toInt()} mg/dL 평균" } ?: "기록 없음"),
+                                "혈압" to "최고 / 최저 혈압 · 기록 없음",
+                                "맥박 / 심박수" to "bpm · 기록 없음",
+                                "체온" to "℃ · 기록 없음",
+                                "호흡수" to "회/분 · 기록 없음",
+                                "산소포화도" to "% · 기록 없음",
+                                "체중" to "kg · 기록 없음",
+                                "체지방률" to "% · 기록 없음",
+                                "골격근량" to "kg · 기록 없음",
+                                "BMI" to "기록 없음",
+                                "심전도" to "측정 기록 없음"
+                            )
+                            vitalRows.forEach { (name, value) ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(name, color = Ink, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                                    Text(value, color = if (value.contains("기록 없음")) Color.Gray else Green, fontSize = 12.sp)
+                                }
+                                Divider(color = PaleGreen)
+                            }
                             ScrollableTabRow(
                                 selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0),
                                 edgePadding = 0.dp,
