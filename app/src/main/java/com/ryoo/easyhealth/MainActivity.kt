@@ -1,5 +1,6 @@
 package com.ryoo.easyhealth
 
+import android.app.Activity
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,8 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.*
+import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -133,6 +138,7 @@ fun EasyHealthApp(context: Context) {
     var showPeopleDialog by remember { mutableStateOf(false) }
     var newPerson by remember { mutableStateOf("") }
     var showDeviceInfo by remember { mutableStateOf(false) }
+    var showAppInfo by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
     var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "주간") ?: "주간") }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
@@ -157,7 +163,23 @@ fun EasyHealthApp(context: Context) {
                         Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink)
                     }
                 }, actions = {
-                    TextButton(onClick = { showPeopleDialog = true }) { Text(selectedPerson + " ▾", color = Green) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                        TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
+                            Text(selectedPerson + " ▾", color = Green, fontSize = 10.sp)
+                        }
+                        TextButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, contentPadding = PaddingValues(horizontal = 3.dp)) {
+                            Icon(Icons.Default.Home, contentDescription = "홈", modifier = Modifier.size(16.dp))
+                            Text("홈", fontSize = 10.sp)
+                        }
+                        TextButton(onClick = { showAppInfo = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
+                            Icon(Icons.Default.Info, contentDescription = "앱정보", modifier = Modifier.size(16.dp))
+                            Text("앱정보", fontSize = 10.sp)
+                        }
+                        TextButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }, contentPadding = PaddingValues(horizontal = 3.dp)) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = "앱종료", modifier = Modifier.size(16.dp))
+                            Text("앱종료", fontSize = 10.sp)
+                        }
+                    }
                 }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF4F8F5)))
             },
             bottomBar = {
@@ -287,6 +309,28 @@ fun EasyHealthApp(context: Context) {
                     }
                     Text("현재는 리포트 표시 설정입니다. 실제 블루투스 연결과 자동 수집은 기기별 호환성 확인 후 추가됩니다.", color = Color.Gray, fontSize = 12.sp)
                     Button(onClick = { tab = "리포트" }, modifier = Modifier.fillMaxWidth()) { Text("설정 완료") }
+                }
+            }
+        }
+    }
+
+    if (showAppInfo) {
+        Dialog(onDismissRequest = { showAppInfo = false }) {
+            Surface(
+                modifier = Modifier.clickable { showAppInfo = false },
+                shape = RoundedCornerShape(22.dp),
+                color = Color.White
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 26.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Favorite, contentDescription = null, tint = Green, modifier = Modifier.size(42.dp))
+                    Text("Easy Health 1.01", color = Ink, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                    Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp)
+                    Text("AI 개발 협력: ChatGPT (OpenAI)", color = Color.Gray, fontSize = 11.sp)
+                    Text("화면을 터치하면 닫힙니다.", color = Color.Gray, fontSize = 10.sp)
                 }
             }
         }
