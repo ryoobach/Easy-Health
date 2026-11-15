@@ -171,7 +171,7 @@ fun EasyHealthApp(context: Context) {
         mutableStateListOf<HospitalAppointment>().apply {
             try {
                 val a = JSONArray(prefs.getString("appointments", "[]") ?: "[]")
-                for (i in 0 until a.length()) { val o = a.getJSONObject(i); add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"), o.optString("status", "예정")))) }
+                for (i in 0 until a.length()) { val o = a.getJSONObject(i); add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"), o.optString("status", "예정"))) }
             } catch (_: Exception) { }
         }
     }
