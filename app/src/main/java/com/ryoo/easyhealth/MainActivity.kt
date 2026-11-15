@@ -59,7 +59,7 @@ fun EasyHealthApp(context: Context) {
     }
     var glucose by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("공복") }
-    var reportPeriod by remember { mutableStateOf("주간") }
+    var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "주간") ?: "주간") }
     var activeTab by remember { mutableStateOf("기록") }
     var showInfo by remember { mutableStateOf(false) }
     val sorted = entries.sortedByDescending { it.timestamp }
@@ -118,12 +118,20 @@ fun EasyHealthApp(context: Context) {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("건강 리포트", fontWeight = FontWeight.Bold, color = Ink, fontSize = 20.sp)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            ScrollableTabRow(
+                                selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0),
+                                edgePadding = 0.dp,
+                                containerColor = Color.White,
+                                contentColor = Green
+                            ) {
                                 listOf("주간", "월간", "분기별", "전체").forEach { label ->
-                                    FilterChip(
+                                    Tab(
                                         selected = reportPeriod == label,
-                                        onClick = { reportPeriod = label },
-                                        label = { Text(label) }
+                                        onClick = {
+                                            reportPeriod = label
+                                            prefs.edit().putString("last_report_period", label).apply()
+                                        },
+                                        text = { Text(label, fontWeight = if (reportPeriod == label) FontWeight.Bold else FontWeight.Normal) }
                                     )
                                 }
                             }
