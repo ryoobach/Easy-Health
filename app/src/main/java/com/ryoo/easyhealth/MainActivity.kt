@@ -1,6 +1,8 @@
 package com.ryoo.easyhealth
 
 import android.app.Activity
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
@@ -23,6 +27,7 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.*
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -550,16 +555,50 @@ private fun RecordDialog(
 @Composable
 private fun AppointmentDialog(existing: HospitalAppointment?, onDismiss: () -> Unit,
     onSave: (String, String, String, String) -> Unit, onDelete: (HospitalAppointment) -> Unit) {
+    val context = LocalContext.current
     var hospital by remember(existing) { mutableStateOf(existing?.hospital ?: "") }
     var date by remember(existing) { mutableStateOf(existing?.date ?: SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(System.currentTimeMillis() + 86400000L))) }
     var time by remember(existing) { mutableStateOf(existing?.time ?: "09:00") }
     var memo by remember(existing) { mutableStateOf(existing?.memo ?: "") }
+
+    fun showDatePicker() {
+        val calendar = java.util.Calendar.getInstance()
+        try {
+            val parsed = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(date)
+            if (parsed != null) calendar.time = parsed
+        } catch (_: Exception) { }
+        DatePickerDialog(context, { _, year, month, day ->
+            date = String.format(Locale.KOREA, "%04d.%02d.%02d", year, month + 1, day)
+        }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH),
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
+    }
+
+    fun showTimePicker() {
+        val parts = time.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        TimePickerDialog(context, { _, selectedHour, selectedMinute ->
+            time = String.format(Locale.KOREA, "%02d:%02d", selectedHour, selectedMinute)
+        }, hour, minute, true).show()
+    }
+
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "병원 일정 등록" else "병원 일정 수정") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = hospital, onValueChange = { hospital = it }, label = { Text("병원명") }, singleLine = true)
-            OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("날짜 (YYYY.MM.DD)") }, singleLine = true)
-            OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("시간 (HH:MM)") }, singleLine = true)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("날짜 (YYYY.MM.DD)") }, singleLine = true, modifier = Modifier.weight(1f))
+                IconButton(onClick = { showDatePicker() }) {
+                    Icon(Icons.Default.DateRange, contentDescription = "달력에서 날짜 선택", tint = Green)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("시간 (HH:MM)") }, singleLine = true, modifier = Modifier.weight(1f))
+                IconButton(onClick = { showTimePicker() }) {
+                    Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green)
+                }
+            }
             OutlinedTextField(value = memo, onValueChange = { memo = it }, label = { Text("진료 내용 / 메모") }, singleLine = true)
+            Text("달력과 시계 아이콘을 누르면 날짜와 시간을 선택할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
             Text("저장하면 지정한 날짜와 시간에 알림을 설정합니다.", color = Color.Gray, fontSize = 11.sp)
             if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("일정 삭제", color = Color.Red) }
         } },
