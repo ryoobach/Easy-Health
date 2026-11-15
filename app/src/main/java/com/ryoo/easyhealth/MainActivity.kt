@@ -236,7 +236,7 @@ fun EasyHealthApp(context: Context) {
                             }, text = { Text(label) })
                         }
                     }
-                    Text(if (reportPeriod == "전체") "전체 기록 기준" else "최근 $days일 기준", color = Color.Gray, fontSize = 12.sp)
+                    Text(if (reportPeriod == "전체") "전체 기록 기준" else "최근 ${days}일 기준", color = Color.Gray, fontSize = 12.sp)
                     if (activeTypes.isEmpty()) {
                         Text("기기 설정에서 리포트에 포함할 기기를 체크해 주세요.", color = Color.Gray)
                     } else {
