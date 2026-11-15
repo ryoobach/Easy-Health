@@ -19,9 +19,9 @@ jobs:
           gradle-version: '8.10.2'
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
-      - name: Package APK as ZIP
-        run: zip -j Easy-Health-APK.zip app/build/outputs/apk/debug/app-debug.apk
+      - name: Name APK with app version
+        run: cp app/build/outputs/apk/debug/app-debug.apk "이지헬스 1.08.apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: Easy-Health-APK
-          path: Easy-Health-APK.zip
+          name: 이지헬스-1.08
+          path: "이지헬스 1.08.apk"
