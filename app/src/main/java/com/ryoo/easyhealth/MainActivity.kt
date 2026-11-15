@@ -60,14 +60,15 @@ fun EasyHealthApp(context: Context) {
     var glucose by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("공복") }
     var reportPeriod by remember { mutableStateOf("주간") }
+    var activeTab by remember { mutableStateOf("기록") }
     var showInfo by remember { mutableStateOf(false) }
     val sorted = entries.sortedByDescending { it.timestamp }
     val latest = sorted.firstOrNull()
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
     val dayFormat = remember { SimpleDateFormat("MM.dd", Locale.KOREA) }
     val now = System.currentTimeMillis()
-    val periodDays = when (reportPeriod) { "월간" -> 30; "분기별" -> 90; else -> 7 }
-    val periodEntries = entries.filter { it.timestamp >= now - periodDays * 24L * 60L * 60L * 1000L && it.timestamp <= now }
+    val periodDays = when (reportPeriod) { "월간" -> 30; "분기별" -> 90; "전체" -> 0; else -> 7 }
+    val periodEntries = if (reportPeriod == "전체") entries.toList() else entries.filter { it.timestamp >= now - periodDays * 24L * 60L * 60L * 1000L && it.timestamp <= now }
     val periodAverage = if (periodEntries.isNotEmpty()) periodEntries.map { it.value }.average() else null
     val dailyAverages = periodEntries.groupBy { dayFormat.format(Date(it.timestamp)) }
         .mapValues { (_, values) -> values.map { it.value }.average() }
@@ -85,12 +86,18 @@ fun EasyHealthApp(context: Context) {
                 Spacer(Modifier.width(8.dp))
                 Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink)
             } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF4F8F5)))
+        }, bottomBar = {
+            NavigationBar(containerColor = Color.White) {
+                NavigationBarItem(selected = activeTab == "기록", onClick = { activeTab = "기록" }, icon = { Icon(Icons.Default.MonitorHeart, contentDescription = null) }, label = { Text("건강 기록") })
+                NavigationBarItem(selected = activeTab == "리포트", onClick = { activeTab = "리포트" }, icon = { Icon(Icons.Default.Favorite, contentDescription = null) }, label = { Text("리포트") })
+            }
         }) { padding ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                if (activeTab == "기록") {
                 item {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.fillMaxWidth().padding(20.dp)) {
@@ -105,12 +112,14 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                 }
+                }
+                if (activeTab == "리포트") {
                 item {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("건강 리포트", fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
+                            Text("건강 리포트", fontWeight = FontWeight.Bold, color = Ink, fontSize = 20.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                                listOf("주간", "월간", "분기별").forEach { label ->
+                                listOf("주간", "월간", "분기별", "전체").forEach { label ->
                                     FilterChip(
                                         selected = reportPeriod == label,
                                         onClick = { reportPeriod = label },
@@ -118,7 +127,7 @@ fun EasyHealthApp(context: Context) {
                                     )
                                 }
                             }
-                            Text("최근 ${periodDays}일 기준", color = Color.Gray, fontSize = 12.sp)
+                            Text(if (reportPeriod == "전체") "처음 기록한 날부터 현재까지" else "최근 ${periodDays}일 기준", color = Color.Gray, fontSize = 12.sp)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column {
                                     Text("평균 혈당", color = Color.Gray, fontSize = 12.sp)
@@ -158,6 +167,9 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                 }
+                }
+                }
+                if (activeTab == "기록") {
                 item {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -198,6 +210,8 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                 }
+                }
+                if (activeTab == "기록") {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.MonitorHeart, null, tint = Green)
@@ -232,6 +246,7 @@ fun EasyHealthApp(context: Context) {
                             Text("개발: Ryoo Jaesang & 최피디\nAI 개발 협력: ChatGPT (OpenAI)", color = Ink, fontSize = 12.sp, lineHeight = 19.sp)
                         }
                     }
+                }
                 }
             }
         }
