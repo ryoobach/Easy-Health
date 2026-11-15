@@ -59,10 +59,24 @@ fun EasyHealthApp(context: Context) {
     }
     var glucose by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("공복") }
+    var reportPeriod by remember { mutableStateOf("주간") }
     var showInfo by remember { mutableStateOf(false) }
     val sorted = entries.sortedByDescending { it.timestamp }
     val latest = sorted.firstOrNull()
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
+    val dayFormat = remember { SimpleDateFormat("MM.dd", Locale.KOREA) }
+    val now = System.currentTimeMillis()
+    val periodDays = when (reportPeriod) { "월간" -> 30; "분기별" -> 90; else -> 7 }
+    val periodEntries = entries.filter { it.timestamp >= now - periodDays * 24L * 60L * 60L * 1000L && it.timestamp <= now }
+    val periodAverage = if (periodEntries.isNotEmpty()) periodEntries.map { it.value }.average() else null
+    val dailyAverages = periodEntries.groupBy { dayFormat.format(Date(it.timestamp)) }
+        .mapValues { (_, values) -> values.map { it.value }.average() }
+        .toList().sortedBy { it.first }
+    val last90Days = entries.filter { it.timestamp >= now - 90L * 24L * 60L * 60L * 1000L && it.timestamp <= now }
+    val last90DayCount = last90Days.map { dayFormat.format(Date(it.timestamp)) }.distinct().size
+    val estimatedA1c = if (last90Days.size >= 30 && last90DayCount >= 14) {
+        ((last90Days.map { it.value }.average() + 46.7) / 28.7)
+    } else null
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(containerColor = Color(0xFFF4F8F5), topBar = {
@@ -88,6 +102,59 @@ fun EasyHealthApp(context: Context) {
                                 Text("mg/dL", color = Green, modifier = Modifier.padding(bottom = 8.dp))
                             }
                             Text(if (latest == null) "아직 등록된 혈당 기록이 없습니다." else "측정 " + dateFormat.format(Date(latest.timestamp)), color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                }
+                item {
+                    Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("건강 리포트", fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                listOf("주간", "월간", "분기별").forEach { label ->
+                                    FilterChip(
+                                        selected = reportPeriod == label,
+                                        onClick = { reportPeriod = label },
+                                        label = { Text(label) }
+                                    )
+                                }
+                            }
+                            Text("최근 ${periodDays}일 기준", color = Color.Gray, fontSize = 12.sp)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("평균 혈당", color = Color.Gray, fontSize = 12.sp)
+                                    Text(periodAverage?.let { "${it.toInt()} mg/dL" } ?: "--", color = Green, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("측정 기록", color = Color.Gray, fontSize = 12.sp)
+                                    Text("${periodEntries.size}건", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            if (dailyAverages.isNotEmpty()) {
+                                Divider(color = PaleGreen)
+                                Text(if (reportPeriod == "주간") "날짜별 평균" else "기간 내 날짜별 평균", color = Ink, fontWeight = FontWeight.SemiBold)
+                                dailyAverages.takeLast(if (reportPeriod == "주간") 7 else 10).forEach { (day, average) ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(day, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.width(48.dp))
+                                        LinearProgressIndicator(
+                                            progress = { (average / 300.0).toFloat().coerceIn(0f, 1f) },
+                                            modifier = Modifier.weight(1f).height(7.dp),
+                                            color = Green,
+                                            trackColor = PaleGreen
+                                        )
+                                        Text("${average.toInt()}", color = Ink, fontSize = 12.sp, modifier = Modifier.width(42.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                                    }
+                                }
+                            } else {
+                                Text("해당 기간에 등록된 혈당 기록이 없습니다.", color = Color.Gray, fontSize = 13.sp)
+                            }
+                            Divider(color = PaleGreen)
+                            Text("예상 당화혈색소 (최근 90일)", color = Ink, fontWeight = FontWeight.SemiBold)
+                            if (estimatedA1c != null) {
+                                Text(String.format(Locale.KOREA, "%.1f%%", estimatedA1c), color = Green, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                Text("혈당 기록의 평균으로 계산한 참고 추정치입니다. 실제 검사 결과와 다를 수 있으며 진단을 대신하지 않습니다.", color = Color.Gray, fontSize = 11.sp, lineHeight = 16.sp)
+                            } else {
+                                Text("추정하려면 최근 90일 동안 최소 30건, 14일 이상의 혈당 기록이 필요합니다.", color = Color.Gray, fontSize = 12.sp, lineHeight = 17.sp)
+                            }
                         }
                     }
                 }
