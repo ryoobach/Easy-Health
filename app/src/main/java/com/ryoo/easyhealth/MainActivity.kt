@@ -287,6 +287,17 @@ fun EasyHealthApp(context: Context) {
                                         }
                                     }
                                 }
+                                if (activeTypes.contains("체온")) {
+                                    val latest = personRecords.firstOrNull { it.type == "체온" }
+                                    Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
+                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text("체온", color = Ink, fontWeight = FontWeight.SemiBold)
+                                            Text(latest?.value ?: "--", color = Green, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                            Text("℃", color = Green, fontSize = 11.sp)
+                                            Text(latest?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
                                 val scaleTypes = listOf("체중", "체지방률", "골격근량", "BMI")
                                 if (scaleTypes.any { activeTypes.contains(it) }) {
                                     Card(Modifier.width(178.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
@@ -302,7 +313,7 @@ fun EasyHealthApp(context: Context) {
                                         }
                                     }
                                 }
-                                val orderedTypes = listOf("체온", "호흡수", "산소포화도", "심전도", "케톤") + activeTypes.filter { it !in listOf("혈당", "케톤", "혈압", "수축기 혈압", "이완기 혈압", "맥박", "체온", "체중", "체지방률", "골격근량", "BMI", "식사", "운동", "수면", "특이사항") }
+                                val orderedTypes = listOf("호흡수", "산소포화도", "심전도", "케톤") + activeTypes.filter { it !in listOf("혈당", "케톤", "혈압", "수축기 혈압", "이완기 혈압", "맥박", "체온", "체중", "체지방률", "골격근량", "BMI", "식사", "운동", "수면", "특이사항") }
                                 orderedTypes.distinct().filter { activeTypes.contains(it) }.forEach { vital ->
                                     val latest = personRecords.firstOrNull { it.type == vital }
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
