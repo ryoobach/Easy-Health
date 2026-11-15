@@ -8,6 +8,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -191,7 +192,7 @@ fun EasyHealthApp(context: Context) {
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
-    var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "주간") ?: "주간") }
+    var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "월간") ?: "월간") }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
     val personRecords = records.filter { it.person == selectedPerson }.sortedByDescending { it.timestamp }
     val activeTypes = devices.filter { enabledDevices.contains(it.first) }.flatMap { it.second }.distinct()
@@ -203,6 +204,8 @@ fun EasyHealthApp(context: Context) {
     val averageGlucose = glucoseValues.takeIf { it.isNotEmpty() }?.average()
     val latestGlucose = personRecords.firstOrNull { it.type == "혈당" }
     val estimatedA1c = averageGlucose?.let { (it + 46.7) / 28.7 }
+    val homeGlucoseAverage = personRecords.filter { it.type == "혈당" && it.timestamp >= now - 90L * 86400000L }.mapNotNull { it.value.toDoubleOrNull() }.takeIf { it.isNotEmpty() }?.average()
+    val homeEstimatedA1c = homeGlucoseAverage?.let { (it + 46.7) / 28.7 }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(
@@ -260,7 +263,7 @@ fun EasyHealthApp(context: Context) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text("당화혈색소 추정치", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                            Text(estimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = Green, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                            Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = Green, fontSize = 30.sp, fontWeight = FontWeight.Bold)
                                             Text("평균 혈당 기반 추정", color = Color.Gray, fontSize = 10.sp)
                                         }
                                     }
@@ -400,6 +403,25 @@ fun EasyHealthApp(context: Context) {
                                     Text("당화혈색소 추정치: ${estimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--"}", color = Ink, fontWeight = FontWeight.SemiBold)
                                 }
                                 Text("평균 혈당으로 계산한 참고용 추정치이며 검사실 당화혈색소 결과를 대신하지 않습니다.", color = Color.Gray, fontSize = 10.sp)
+                            }
+                        }
+                        if (glucoseRecords.isNotEmpty()) {
+                            val dailyGlucose = glucoseRecords.groupBy { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) }.toSortedMap()
+                            val maxDaily = dailyGlucose.values.maxOfOrNull { rows -> rows.mapNotNull { it.value.toDoubleOrNull() }.average() }?.coerceAtLeast(1.0) ?: 1.0
+                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("일별 혈당 변화", color = Ink, fontWeight = FontWeight.SemiBold)
+                                    dailyGlucose.toList().takeLast(14).forEach { (day, rows) ->
+                                        val avg = rows.mapNotNull { it.value.toDoubleOrNull() }.average()
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(day, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.width(42.dp))
+                                            Box(Modifier.weight(1f).height(10.dp).background(PaleGreen, RoundedCornerShape(6.dp))) {
+                                                Box(Modifier.fillMaxWidth((avg / maxDaily).toFloat().coerceIn(0.03f, 1f)).fillMaxHeight().background(Green, RoundedCornerShape(6.dp)))
+                                            }
+                                            Text(avg.toInt().toString(), color = Ink, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
                             }
                         }
                         val bpRecords = periodRecords.filter { it.type == "혈압" }
