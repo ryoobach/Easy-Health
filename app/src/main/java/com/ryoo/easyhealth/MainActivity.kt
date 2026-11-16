@@ -529,17 +529,20 @@ fun EasyHealthApp(context: Context) {
                                 val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
                                 if (activeTypes.contains("혈당")) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(horizontal = 11.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                                            Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                        Column(Modifier.padding(horizontal = 11.dp, vertical = 3.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                                Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                Spacer(Modifier.weight(1f))
+                                                Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 8.sp, maxLines = 1)
+                                            }
                                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                                                 Text("mg/dL", color = Green, fontSize = 9.sp, modifier = Modifier.padding(bottom = 4.dp))
                                             }
                                             glucoseRecord?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }
-                                            Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 8.sp)
-                                            HorizontalDivider(color = Color(0xFFD5E8D9), thickness = 1.dp, modifier = Modifier.padding(vertical = 3.dp))
+                                            HorizontalDivider(color = Color(0xFFD5E8D9), thickness = 1.dp, modifier = Modifier.padding(vertical = 2.dp))
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("당화혈색소", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 9.sp)
+                                                Text("당화혈색소", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
                                                 Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                             }
                                             Text("최근 90일 평균 혈당 기반 추정", color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp)
