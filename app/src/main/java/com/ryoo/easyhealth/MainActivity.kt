@@ -7,6 +7,8 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,7 +57,7 @@ private val Green = Color(0xFF16834A)
 private val PaleGreen = Color(0xFFEAF5ED)
 private val Ink = Color(0xFF183326)
 
-private val vitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항")
+private val vitalTypes = listOf("혈당", "혈압", "체중", "체온", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항")
 private val units = mapOf("혈당" to "mg/dL", "케톤" to "mmol/L", "혈압" to "mmHg", "체온" to "℃", "호흡수" to "회/분", "산소포화도" to "%", "체중" to "kg", "체지방률" to "%", "골격근량" to "kg", "BMI" to "", "심전도" to "", "식사" to "", "운동" to "", "수면" to "", "특이사항" to "")
 private val devices = listOf(
     "Contour Plus ONE" to listOf("혈당"),
@@ -199,6 +201,20 @@ fun EasyHealthApp(context: Context) {
     var deviceDeleteTarget by remember { mutableStateOf<String?>(null) }
     var newPerson by remember { mutableStateOf("") }
     var showDeviceInfo by remember { mutableStateOf(false) }
+    var showBluetoothSearch by remember { mutableStateOf(false) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) try {
+            val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+            val array = JSONArray(raw); var imported = 0
+            for (i in 0 until array.length()) {
+                val o = array.getJSONObject(i)
+                val item = VitalRecord(o.optString("id", UUID.randomUUID().toString()), o.optString("person", selectedPerson), o.optString("type", "혈당"), o.optString("value", ""), o.optLong("timestamp"), o.optString("source", "가져오기"), o.optString("note", ""), o.optString("externalId", ""))
+                if (records.none { it.id == item.id || (it.person == item.person && it.type == item.type && it.timestamp == item.timestamp && it.value == item.value) }) { records.add(item); imported++ }
+            }
+            persistRecords(context, records)
+            android.widget.Toast.makeText(context, "${imported}건의 기록을 가져왔습니다.", android.widget.Toast.LENGTH_LONG).show()
+        } catch (_: Exception) { android.widget.Toast.makeText(context, "올바른 Easy Health JSON 파일이 아닙니다.", android.widget.Toast.LENGTH_LONG).show() }
+    }
     var showAppInfo by remember { mutableStateOf(false) }
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
@@ -237,7 +253,7 @@ fun EasyHealthApp(context: Context) {
             topBar = {
                 TopAppBar(title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Favorite, null, tint = Green)
+                        Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(28.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink)
                     }
@@ -350,34 +366,29 @@ fun EasyHealthApp(context: Context) {
                             if (activeTypes.isEmpty()) Text("기기 설정에서 표시할 바이탈 항목을 선택해 주세요.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
                         }
                     }
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("건강 측정값 입력", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
-                            Text("새 기록을 추가하거나 기존 기록을 눌러 수정·삭제할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
-                            Button(onClick = { editing = null; showRecordDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("측정 기록 추가")
-                            }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(4.dp)); Text("블루투스 자동 가져오기", fontSize = 10.sp)
-                                }
-                                OutlinedButton(onClick = {
-                                    val csv = buildString {
-                                        appendLine("대상자,항목,측정값,측정일시,측정기기,메모")
-                                        records.sortedBy { it.timestamp }.forEach { r ->
-                                            appendLine(listOf(r.person, r.type, r.value, dateFormat.format(Date(r.timestamp)), r.source, r.note).joinToString(","))
-                                        }
-                                    }
-                                    val send = Intent(Intent.ACTION_SEND).apply { type = "text/csv"; putExtra(Intent.EXTRA_SUBJECT, "Easy Health 건강 기록"); putExtra(Intent.EXTRA_TEXT, csv) }
-                                    context.startActivity(Intent.createChooser(send, "건강 기록 내보내기"))
-                                }, modifier = Modifier.weight(1f)) { Text("데이터 내보내기", fontSize = 10.sp) }
-                            }
-                        }
-                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("통합 건강 기록", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
                         Spacer(Modifier.weight(1f))
                         Text("${personRecords.size}건", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("측정 기록 추가", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            Button(onClick = { editing = null; showRecordDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("측정 기록 추가")
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(3.dp)); Text("블루투스 자동 가져오기", fontSize = 9.sp, lineHeight = 11.sp)
+                        }
+                        OutlinedButton(onClick = {
+                            val payload = encodeRecords(records)
+                            val send = Intent(Intent.ACTION_SEND).apply { type = "application/json"; putExtra(Intent.EXTRA_SUBJECT, "Easy Health 건강 기록"); putExtra(Intent.EXTRA_TEXT, payload) }
+                            context.startActivity(Intent.createChooser(send, "건강 기록 내보내기"))
+                        }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 내보내기", fontSize = 9.sp) }
+                        OutlinedButton(onClick = { importLauncher.launch("application/json") }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 가져오기", fontSize = 9.sp) }
                     }
                     if (personRecords.isEmpty()) {
                         Text("이 대상자의 측정 기록이 없습니다.", color = Color.Gray, modifier = Modifier.padding(12.dp))
@@ -551,7 +562,7 @@ fun EasyHealthApp(context: Context) {
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("등록한 기기 중 리포트에 포함할 기기만 체크해 주세요. 같은 항목을 측정하는 기기는 통합해서 분석합니다.", color = Color.Gray, fontSize = 13.sp)
-                    Button(onClick = { registerSelections.clear(); registerSelections.addAll(devices.map { it.first }.filter { it !in registeredDevices }); showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 등록")
                     }
                     if (registeredDevices.isEmpty()) {
@@ -588,34 +599,18 @@ fun EasyHealthApp(context: Context) {
 
     if (showRegisterDeviceDialog) {
         AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 등록") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    devices.filter { it.first !in registeredDevices }.forEach { device ->
-                        Row(Modifier.fillMaxWidth().clickable {
-                            if (device.first in registerSelections) registerSelections.remove(device.first) else registerSelections.add(device.first)
-                        }, verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = device.first in registerSelections, onCheckedChange = { checked ->
-                                if (checked && device.first !in registerSelections) registerSelections.add(device.first)
-                                if (!checked) registerSelections.remove(device.first)
-                            })
-                            Column {
-                                Text(device.first, color = Ink, fontWeight = FontWeight.SemiBold)
-                                Text(device.second.joinToString(" · "), color = Color.Gray, fontSize = 11.sp)
-                            }
-                        }
-                    }
+            text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("등록된 기기가 없습니다. 측정기기에서 블루투스 페어링을 시작한 뒤 검색해 주세요.", color = Color.Gray, fontSize = 13.sp)
+                Button(onClick = { showBluetoothSearch = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("블루투스 기기 찾기")
                 }
-            },
-            confirmButton = { TextButton(onClick = {
-                registerSelections.forEach { name ->
-                    if (name !in registeredDevices) registeredDevices.add(name)
-                    if (name !in enabledDevices) enabledDevices.add(name)
-                }
-                prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
-                    .putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
-                showRegisterDeviceDialog = false
-            }) { Text("등록") } },
-            dismissButton = { TextButton(onClick = { showRegisterDeviceDialog = false }) { Text("취소") } })
+            } },
+            confirmButton = { TextButton(onClick = { showRegisterDeviceDialog = false }) { Text("닫기") } })
+    }
+    if (showBluetoothSearch) {
+        AlertDialog(onDismissRequest = { showBluetoothSearch = false }, title = { Text("블루투스 기기 찾기") },
+            text = { Text("실제 주변 기기 검색과 페어링 기능은 아직 연결되지 않았습니다. 다음 개발 단계에서 지원하겠습니다.", color = Color.Gray) },
+            confirmButton = { TextButton(onClick = { showBluetoothSearch = false }) { Text("확인") } })
     }
     deviceDeleteTarget?.let { target ->
         AlertDialog(onDismissRequest = { deviceDeleteTarget = null },
@@ -780,7 +775,7 @@ fun EasyHealthApp(context: Context) {
     }
     if (showDeviceInfo) {
         AlertDialog(onDismissRequest = { showDeviceInfo = false }, title = { Text("블루투스 자동 가져오기") },
-            text = { Text("현재 시험판에는 기기 선택과 통합 기록 구조가 준비되어 있습니다. Contour Plus ONE과 CareSens Dual을 포함한 실제 블루투스 연결·데이터 수신은 기기별 통신 방식 확인 후 추가해야 합니다. 아직 자동 수집은 실행되지 않습니다.") },
+            text = { Text("등록된 블루투스 측정기기에서 데이터를 가져오는 기능은 기기별 연결 지원 후 사용할 수 있습니다.") },
             confirmButton = { TextButton(onClick = { showDeviceInfo = false }) { Text("확인") } })
     }
 }
@@ -815,7 +810,7 @@ private fun RecordDialog(
         val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
         TimePickerDialog(context, { _, h, m -> measuredTime = String.format(Locale.KOREA, "%02d:%02d", h, m) }, hour, minute, true).show()
     }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "$person 측정 기록 추가" else "측정 기록 수정") },
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "측정 기록 추가" else "측정 기록 수정") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                 Text("측정 항목", color = Ink, fontWeight = FontWeight.SemiBold)
@@ -867,7 +862,7 @@ private fun RecordDialog(
             val savedValue = if (type == "혈압") "${systolic.trim()}/${diastolic.trim()}/${pulse.trim()}" else value.trim()
             val validValue = if (type == "혈압") systolic.isNotBlank() && diastolic.isNotBlank() && pulse.isNotBlank() else value.trim().isNotEmpty()
             if (validValue && timestamp != null) onSave(type, savedValue, note.trim(), source, timestamp)
-        }) { Text("저장") } },
+        }) { Text("확인") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
 }
 
