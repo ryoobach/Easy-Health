@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:label="Easy Health 1.22" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:label="Easy Health 1.23" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:label="Easy Health" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
