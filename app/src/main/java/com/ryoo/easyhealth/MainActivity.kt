@@ -206,7 +206,7 @@ fun EasyHealthApp(context: Context) {
     var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "월간") ?: "월간") }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
     val personRecords = records.filter { it.person == selectedPerson }.sortedByDescending { it.timestamp }
-    val activeTypes = devices.filter { enabledDevices.contains(it.first) }.flatMap { it.second }.distinct()
+    val activeTypes = devices.filter { enabledDevices.contains(it.first) && registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
     val reportRecords = personRecords.filter { activeTypes.contains(it.type) }
     val now = System.currentTimeMillis()
     val days = when (reportPeriod) { "월간" -> 30; "분기별" -> 90; "전체" -> 0; else -> 7 }
