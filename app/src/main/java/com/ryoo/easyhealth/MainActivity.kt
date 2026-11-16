@@ -151,7 +151,7 @@ private data class GlucoseMeasurementGroup(val source: String, val timestamp: Lo
 // 같은 기기에서 60초 이내 연속 측정한 혈당은 하나의 측정 묶음으로 계산합니다.
 private fun glucoseMeasurementGroups(records: List<VitalRecord>, maxGapMillis: Long = 60_000L): List<GlucoseMeasurementGroup> {
     val sorted = records.filter { it.type == "혈당" && it.value.toDoubleOrNull() != null }
-        .sortedWith(compareBy<VitalRecord> { it.source }.thenBy { it.timestamp })
+        .sortedBy { it.timestamp }
     val result = mutableListOf<GlucoseMeasurementGroup>()
     var currentSource: String? = null
     var current = mutableListOf<Pair<Long, Double>>()
@@ -166,7 +166,7 @@ private fun glucoseMeasurementGroups(records: List<VitalRecord>, maxGapMillis: L
         val value = record.value.toDoubleOrNull() ?: return@forEach
         val source = record.source.ifBlank { "기기 미지정" }
         val previousTime = current.lastOrNull()?.first
-        if (current.isNotEmpty() && (source != currentSource || record.timestamp - (previousTime ?: record.timestamp) > maxGapMillis)) flush()
+        if (current.isNotEmpty() && record.timestamp - (previousTime ?: record.timestamp) > maxGapMillis) flush()
         if (current.isEmpty()) currentSource = source
         current.add(record.timestamp to value)
     }
@@ -523,7 +523,7 @@ fun EasyHealthApp(context: Context) {
             when (tab) {
                 "기록" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
@@ -553,7 +553,7 @@ fun EasyHealthApp(context: Context) {
                                     val diastolic = bpParts?.getOrNull(1) ?: personRecords.firstOrNull { it.type == "이완기 혈압" }?.value
                                     val pulse = bpParts?.getOrNull(2) ?: personRecords.firstOrNull { it.type == "맥박" }?.value
                                     Card(Modifier.width(158.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                             Text("혈압 · 맥박", color = Ink, fontWeight = FontWeight.SemiBold)
                                             Text(if (systolic != null && diastolic != null) "$systolic/$diastolic" else "--/--", color = bp?.let { riskFor("혈압", it.value, selectedProfile).color } ?: Color.Gray, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                                             bp?.let { Text(riskFor("혈압", it.value, selectedProfile).label, color = riskFor("혈압", it.value, selectedProfile).color, fontSize = 10.sp) }
@@ -566,7 +566,7 @@ fun EasyHealthApp(context: Context) {
                                 if (activeTypes.contains("체온")) {
                                     val latest = personRecords.firstOrNull { it.type == "체온" }
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text("체온", color = Ink, fontWeight = FontWeight.SemiBold)
                                             Text(latest?.value ?: "--", color = latest?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                                             latest?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 10.sp) }
@@ -578,7 +578,7 @@ fun EasyHealthApp(context: Context) {
                                 val scaleTypes = listOf("체중", "체지방률", "골격근량", "BMI")
                                 if (scaleTypes.any { activeTypes.contains(it) }) {
                                     Card(Modifier.width(178.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                             Text("체중계 측정값", color = Ink, fontWeight = FontWeight.SemiBold)
                                             scaleTypes.filter { activeTypes.contains(it) }.forEach { scaleType ->
                                                 val latest = personRecords.firstOrNull { it.type == scaleType }
@@ -594,7 +594,7 @@ fun EasyHealthApp(context: Context) {
                                 orderedTypes.distinct().filter { activeTypes.contains(it) }.forEach { vital ->
                                     val latest = personRecords.firstOrNull { it.type == vital }
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(vital, color = Ink, fontWeight = FontWeight.SemiBold)
                                             Text(latest?.value ?: "--", color = latest?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                                             latest?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 10.sp) }
@@ -838,11 +838,12 @@ fun EasyHealthApp(context: Context) {
                                                     val endLabel = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(rangeEnd - 1))
                                                     Text("$startLabel ~ $endLabel", color = Ink, fontWeight = FontWeight.Bold)
                                                     rangeRows.groupBy { it.source.ifBlank { "기기 미지정" } }.toSortedMap().forEach { (sourceName, deviceRows) ->
-                                                        val values = deviceRows.mapNotNull { it.value.toDoubleOrNull() }
+                                                        val groups = glucoseMeasurementGroups(deviceRows)
+                                                        val values = groups.map { it.average }
                                                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                             Text(sourceName, color = Green, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                                             if (values.isNotEmpty()) {
-                                                                Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} mg/dL · 최고 ${values.maxOrNull()?.toInt()} · 최저 ${values.minOrNull()?.toInt()} · ${values.size}회", color = Ink, fontSize = 11.sp)
+                                                                Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} mg/dL · 최고 ${values.maxOrNull()?.toInt()} · 최저 ${values.minOrNull()?.toInt()} · ${groups.size}회", color = Ink, fontSize = 11.sp)
                                                             } else Text("${deviceRows.size}회 측정", color = Ink, fontSize = 11.sp)
                                                         }
                                                     }
