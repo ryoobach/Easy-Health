@@ -154,7 +154,14 @@ private fun riskFor(type: String, value: String, profile: PersonProfile? = null)
     val v = value.trim().toDoubleOrNull()
     return when (type) {
         "당화혈색소 추정치" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 5.7 -> RiskInfo("참고 범위", green); v < 6.5 -> RiskInfo("주의 범위", yellow); else -> RiskInfo("높음", red) }
-        "혈당" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 70 -> RiskInfo("저혈당 위험", red); v <= 130 -> RiskInfo("일반 참고 범위", green); v <= 180 -> RiskInfo("높음 · 관리 필요", orange); else -> RiskInfo("매우 높음", red) }
+        "혈당" -> when {
+            v == null -> RiskInfo("판정 불가", Color.Gray)
+            v < 54 -> RiskInfo("심각한 저혈당", Color(0xFF8E0000))
+            v < 70 -> RiskInfo("저혈당", orange)
+            v <= 130 -> RiskInfo("정상 참고 범위", green)
+            v <= 180 -> RiskInfo("약간 높음", yellow)
+            else -> RiskInfo("매우 높음", red)
+        }
         "혈압" -> {
             val p = value.split("/").mapNotNull { it.toDoubleOrNull() }
             if (p.size < 2) RiskInfo("판정 불가", Color.Gray)
