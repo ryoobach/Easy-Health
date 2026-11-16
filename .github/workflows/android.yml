@@ -37,8 +37,8 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Name APK with app version
-        run: cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.12.apk"
+        run: cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.13.apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: Easy-Health-1.12
-          path: "Easy-Health-1.12.apk"
+          name: Easy-Health-1.13
+          path: "Easy-Health-1.13.apk"
