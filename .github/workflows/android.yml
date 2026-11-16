@@ -47,7 +47,7 @@ jobs:
           echo "Application ID: $APP_ID"
           echo "Version code: $VERSION_CODE"
           test "$APP_ID" = "com.ryoo.easyhealth"
-          test "$VERSION_CODE" -ge 24
+          test "$VERSION_CODE" -ge 25
       - name: Verify APK uses the established signing certificate
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"

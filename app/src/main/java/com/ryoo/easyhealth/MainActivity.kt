@@ -318,6 +318,8 @@ fun EasyHealthApp(context: Context) {
     var showAppointmentDialog by remember { mutableStateOf(false) }
     var editingAppointment by remember { mutableStateOf<HospitalAppointment?>(null) }
     var appointmentSection by remember { mutableStateOf("예정 일정") }
+    var selectedAppointmentDate by remember { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date())) }
+    var appointmentInitialDate by remember { mutableStateOf<String?>(null) }
     var appointmentDeleteTarget by remember { mutableStateOf<HospitalAppointment?>(null) }
     var showRecordDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<VitalRecord?>(null) }
@@ -404,7 +406,7 @@ fun EasyHealthApp(context: Context) {
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
-    var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "월간") ?: "월간") }
+    var reportPeriod by remember { mutableStateOf((prefs.getString("last_report_period", "월간") ?: "월간").let { if (it == "분기별") "3개월" else it }) }
     var selectedReportVital by remember { mutableStateOf(prefs.getString("last_report_vital", "혈당") ?: "혈당") }
     var deviceHelpTarget by remember { mutableStateOf<String?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
@@ -415,7 +417,7 @@ fun EasyHealthApp(context: Context) {
     val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
     if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
-    val days = when (reportPeriod) { "월간" -> 30; "분기별" -> 90; "전체" -> 0; else -> 7 }
+    val days = when (reportPeriod) { "월간" -> 30; "3개월" -> 90; "전체" -> 0; else -> 7 }
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp >= now - days * 86400000L }
     val glucoseValues = periodRecords.filter { it.type == "혈당" }.mapNotNull { it.value.toDoubleOrNull() }
     val averageGlucose = glucoseValues.takeIf { it.isNotEmpty() }?.average()
@@ -443,26 +445,26 @@ fun EasyHealthApp(context: Context) {
             topBar = {
                 TopAppBar(title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(28.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink, fontSize = 16.sp, maxLines = 1, softWrap = false)
+                        Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink, fontSize = 14.sp, maxLines = 1, softWrap = false)
                     }
                 }, actions = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
-                            Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                        TextButton(onClick = { showPeopleDialog = true }, modifier = Modifier.widthIn(max = 66.dp), contentPadding = PaddingValues(horizontal = 1.dp)) {
+                            Text(selectedPerson + " ▾", color = Green, fontSize = 10.sp, maxLines = 1, softWrap = false)
                         }
-                        IconButton(onClick = { personEditing = PersonProfile("") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green, modifier = Modifier.size(18.dp)) }
-                        IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = { personEditing = PersonProfile("") }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green, modifier = Modifier.size(18.dp)) }
+                        IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "홈", tint = Green, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { showHelpDialog = true }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = { showHelpDialog = true }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Default.Help, contentDescription = "도움말", tint = Green, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { showAppInfo = true }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = { showAppInfo = true }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Default.Info, contentDescription = "앱정보", tint = Green, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }, modifier = Modifier.size(28.dp)) {
                             Icon(Icons.Default.ExitToApp, contentDescription = "앱종료", tint = Green, modifier = Modifier.size(18.dp))
                         }
                     }
@@ -595,20 +597,20 @@ fun EasyHealthApp(context: Context) {
                         personRecords.forEach { record ->
                             Card(modifier = Modifier.fillMaxWidth().clickable { editing = record; showRecordDialog = true },
                                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                         Text(record.type, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(dateFormat.format(Date(record.timestamp)), color = Color.Gray, fontSize = 10.sp, lineHeight = 12.sp)
                                         Text(record.source + if (record.note.isNotBlank()) " · " + record.note else "", color = Color.Gray, fontSize = 10.sp, lineHeight = 12.sp)
                                     }
-                                    Column(horizontalAlignment = Alignment.End) {
+                                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(0.dp)) {
                                         val risk = riskFor(record.type, record.value, selectedProfile)
-                                        mealPeriodFor(record.timestamp, selectedProfile)?.let { period ->
-                                            Text(period.label, color = period.color, fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+                                        if (record.type == "혈당") mealPeriodFor(record.timestamp, selectedProfile)?.let { period ->
+                                            Text(period.label, color = period.color, fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 9.sp)
                                         }
                                         Text(record.value + (units[record.type]?.let { if (it.isNotBlank()) " $it" else "" } ?: ""),
-                                            color = risk.color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                        Text(risk.label, color = risk.color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                            color = risk.color, fontSize = 18.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
+                                        Text(risk.label, color = risk.color, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, lineHeight = 10.sp)
                                     }
                                 }
                             }
@@ -624,9 +626,6 @@ fun EasyHealthApp(context: Context) {
                 "병원 일정" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("병원 방문 일정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("진료 날짜와 시간을 등록하면 해당 시각에 휴대폰 알림을 보내드립니다.", color = Color.Gray, fontSize = 13.sp)
-                    Button(onClick = { editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("병원 일정 추가")
-                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("예정 일정", "지난 일정").forEach { section ->
                             FilterChip(selected = appointmentSection == section, onClick = { appointmentSection = section }, label = { Text(section) })
@@ -634,9 +633,21 @@ fun EasyHealthApp(context: Context) {
                     }
                     val nowForAppointments = System.currentTimeMillis()
                     val appointmentDateFormat = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA)
+                    val visibleDates = appointments.filter { a ->
+                        val at = try { appointmentDateFormat.parse("${a.date} ${a.time}")?.time ?: 0L } catch (_: Exception) { 0L }
+                        if (appointmentSection == "예정 일정") at >= nowForAppointments && a.status == "예정" else at < nowForAppointments || a.status != "예정"
+                    }.map { it.date }.toSet()
+                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = visibleDates, onDateSelected = { selectedAppointmentDate = it })
+                    Button(onClick = {
+                        appointmentInitialDate = selectedAppointmentDate
+                        editingAppointment = null
+                        showAppointmentDialog = true
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(if (appointmentSection == "예정 일정") "선택한 날짜에 예약 등록" else "선택한 날짜에 진료 메모 추가")
+                    }
                     val visibleAppointments = appointments.filter { a ->
                         val whenAt = try { appointmentDateFormat.parse("${a.date} ${a.time}")?.time ?: 0L } catch (_: Exception) { 0L }
-                        if (appointmentSection == "예정 일정") whenAt >= nowForAppointments else whenAt < nowForAppointments
+                        if (appointmentSection == "예정 일정") whenAt >= nowForAppointments && a.status == "예정" else whenAt < nowForAppointments || a.status != "예정"
                     }.sortedBy { it.date + " " + it.time }
                     if (visibleAppointments.isEmpty()) Text(if (appointmentSection == "예정 일정") "예정된 병원 일정이 없습니다." else "지난 병원 일정이 없습니다.", color = Color.Gray)
                     else visibleAppointments.forEach { a ->
@@ -663,15 +674,15 @@ fun EasyHealthApp(context: Context) {
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
-                    ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
-                        listOf("주간", "월간", "분기별", "전체").forEach { label ->
+                    ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
+                        listOf("주간", "월간", "3개월", "전체").forEach { label ->
                             Tab(selected = reportPeriod == label, onClick = {
                                 reportPeriod = label
                                 prefs.edit().putString("last_report_period", label).apply()
                             }, text = { Text(label) })
                         }
                     }
-                    Text(if (reportPeriod == "전체") "전체 기록 기준" else "최근 ${days}일 기준", color = Color.Gray, fontSize = 12.sp)
+                    Text(when (reportPeriod) { "전체" -> "전체 기록 기준"; "3개월" -> "최근 3개월 기준"; else -> "최근 ${days}일 기준" }, color = Color.Gray, fontSize = 12.sp)
                     if (reportVitalTypes.isEmpty()) {
                         Text("기기 설정에서 리포트에 포함할 기기를 체크해 주세요.", color = Color.Gray)
                     } else {
@@ -689,7 +700,9 @@ fun EasyHealthApp(context: Context) {
                                         Text("그래프로 표시할 숫자 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
-                                        Canvas(Modifier.fillMaxWidth().height(170.dp)) {
+                                        val graphCanvasWidth = if (reportPeriod == "전체" || reportPeriod == "3개월") maxOf(320.dp, (graphRows.size * 24).dp) else 360.dp
+                                        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                                        Canvas(Modifier.width(graphCanvasWidth).height(170.dp)) {
                                             val values = graphRows.map { it.second }
                                             val rawMin = values.minOrNull() ?: 0.0
                                             val rawMax = values.maxOrNull() ?: 1.0
@@ -712,12 +725,13 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             val points = graphRows.mapIndexed { index, pair -> Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV))) }
                                             for (i in 0 until points.lastIndex) drawLine(Color.Gray.copy(alpha = 0.65f), points[i], points[i + 1], strokeWidth = 1.5.dp.toPx())
-                                            points.forEachIndexed { index, point -> drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = 4.5.dp.toPx(), center = point) }
+                                            points.forEachIndexed { index, point -> drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = if (reportPeriod == "전체" || reportPeriod == "3개월") 2.3.dp.toPx() else 3.dp.toPx(), center = point) }
                                             val datePaint = android.graphics.Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 9.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER }
                                             listOf(0, graphRows.size / 2, graphRows.lastIndex).distinct().forEach { index ->
                                                 val date = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(graphRows[index].first.timestamp))
                                                 drawContext.canvas.nativeCanvas.drawText(date, xFor(index), size.height - 5.dp.toPx(), datePaint)
                                             }
+                                        }
                                         }
                                     }
                                 }
@@ -745,6 +759,49 @@ fun EasyHealthApp(context: Context) {
                                         Text("총 ${vitalRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                     }
                                     vitalRows.lastOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
+                                }
+                            }
+                            if (vital == "혈당" && reportPeriod == "전체" && vitalRows.isNotEmpty()) {
+                                val firstGlucose = vitalRows.minOf { it.timestamp }
+                                val lastGlucose = vitalRows.maxOf { it.timestamp }
+                                val chunkRanges = mutableListOf<Pair<Long, Long>>()
+                                var chunkStart = java.util.Calendar.getInstance().apply {
+                                    timeInMillis = firstGlucose
+                                    set(java.util.Calendar.DAY_OF_MONTH, 1)
+                                    set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                    set(java.util.Calendar.MINUTE, 0)
+                                    set(java.util.Calendar.SECOND, 0)
+                                    set(java.util.Calendar.MILLISECOND, 0)
+                                }
+                                while (chunkStart.timeInMillis <= lastGlucose) {
+                                    val startMillis = chunkStart.timeInMillis
+                                    val endCalendar = (chunkStart.clone() as java.util.Calendar).apply { add(java.util.Calendar.MONTH, 3) }
+                                    chunkRanges.add(startMillis to endCalendar.timeInMillis)
+                                    chunkStart = endCalendar
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("전체 혈당 기록 · 3개월 단위 / 측정 기기별", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    chunkRanges.asReversed().forEach { (rangeStart, rangeEnd) ->
+                                        val rangeRows = vitalRows.filter { it.timestamp >= rangeStart && it.timestamp < rangeEnd }
+                                        if (rangeRows.isNotEmpty()) {
+                                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+                                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    val startLabel = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(rangeStart))
+                                                    val endLabel = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(rangeEnd - 1))
+                                                    Text("$startLabel ~ $endLabel", color = Ink, fontWeight = FontWeight.Bold)
+                                                    rangeRows.groupBy { it.source.ifBlank { "기기 미지정" } }.toSortedMap().forEach { (sourceName, deviceRows) ->
+                                                        val values = deviceRows.mapNotNull { it.value.toDoubleOrNull() }
+                                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                            Text(sourceName, color = Green, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                                            if (values.isNotEmpty()) {
+                                                                Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} mg/dL · 최고 ${values.maxOrNull()?.toInt()} · 최저 ${values.minOrNull()?.toInt()} · ${values.size}회", color = Ink, fontSize = 11.sp)
+                                                            } else Text("${deviceRows.size}회 측정", color = Ink, fontSize = 11.sp)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -893,6 +950,7 @@ fun EasyHealthApp(context: Context) {
                     Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(76.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text("Easy Health", color = Ink, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+                        Text("버전 ${BuildConfig.VERSION_NAME}", color = Color.Gray, fontSize = 12.sp)
                         Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp)
                     }
                 }
@@ -922,14 +980,16 @@ fun EasyHealthApp(context: Context) {
         )
     }
     if (showAppointmentDialog) {
-        AppointmentDialog(existing = editingAppointment, onDismiss = { showAppointmentDialog = false },
+        AppointmentDialog(existing = editingAppointment, initialDate = appointmentInitialDate, initialStatus = if (appointmentSection == "지난 일정") "진료 완료" else "예정", onDismiss = { showAppointmentDialog = false; appointmentInitialDate = null },
             onSave = { hospital, date, time, memo, status ->
                 val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
                 val parsed = try { fmt.parse("$date $time") } catch (_: Exception) { null }
-                if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || parsed.time > System.currentTimeMillis())) {
+                if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || appointmentSection == "지난 일정" || parsed.time > System.currentTimeMillis())) {
                     editingAppointment?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
                     val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, status)
                     appointments.add(saved); saveAppointments(context, appointments); scheduleAppointmentReminder(context, saved)
+                    selectedAppointmentDate = date
+                    appointmentInitialDate = null
                     if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                         (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 701)
                     showAppointmentDialog = false
@@ -1244,14 +1304,75 @@ private fun RecordDialog(
 }
 
 @Composable
-private fun AppointmentDialog(existing: HospitalAppointment?, onDismiss: () -> Unit,
+private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onDateSelected: (String) -> Unit) {
+    val monthCalendar = remember(selectedDate) {
+        java.util.Calendar.getInstance().apply {
+            try { time = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(selectedDate) ?: Date() } catch (_: Exception) { }
+            set(java.util.Calendar.DAY_OF_MONTH, 1)
+        }
+    }
+    var displayedMonth by remember(selectedDate) { mutableStateOf(monthCalendar.timeInMillis) }
+    val month = java.util.Calendar.getInstance().apply { timeInMillis = displayedMonth }
+    val year = month.get(java.util.Calendar.YEAR)
+    val monthIndex = month.get(java.util.Calendar.MONTH)
+    val firstDayOffset = (month.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
+    val daysInMonth = month.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = {
+                    val c = java.util.Calendar.getInstance().apply { timeInMillis = displayedMonth; add(java.util.Calendar.MONTH, -1) }
+                    displayedMonth = c.timeInMillis
+                }) { Text("‹", fontSize = 24.sp, color = Green) }
+                Spacer(Modifier.weight(1f))
+                Text(String.format(Locale.KOREA, "%04d년 %02d월", year, monthIndex + 1), color = Ink, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = {
+                    val c = java.util.Calendar.getInstance().apply { timeInMillis = displayedMonth; add(java.util.Calendar.MONTH, 1) }
+                    displayedMonth = c.timeInMillis
+                }) { Text("›", fontSize = 24.sp, color = Green) }
+            }
+            Row(Modifier.fillMaxWidth()) {
+                listOf("월", "화", "수", "목", "금", "토", "일").forEach { day ->
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Text(day, color = if (day == "일") Color(0xFFD16B6B) else Color.Gray, fontSize = 11.sp)
+                    }
+                }
+            }
+            for (week in 0 until 6) {
+                Row(Modifier.fillMaxWidth()) {
+                    for (weekday in 0 until 7) {
+                        val dayNumber = week * 7 + weekday - firstDayOffset + 1
+                        if (dayNumber in 1..daysInMonth) {
+                            val date = String.format(Locale.KOREA, "%04d.%02d.%02d", year, monthIndex + 1, dayNumber)
+                            val marked = date in markedDates
+                            val selected = date == selectedDate
+                            Box(Modifier.weight(1f).aspectRatio(1f).padding(2.dp)
+                                .background(when { selected -> Color(0xFFB7DCC2); marked -> Color(0xFFE5F2E8); else -> Color.Transparent }, RoundedCornerShape(9.dp))
+                                .clickable { onDateSelected(date) }, contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text(dayNumber.toString(), color = if (weekday == 6) Color(0xFFD16B6B) else Ink, fontSize = 12.sp, fontWeight = if (selected || marked) FontWeight.Bold else FontWeight.Normal)
+                                    if (marked) Box(Modifier.size(4.dp).background(Green, RoundedCornerShape(50)))
+                                }
+                            }
+                        } else Spacer(Modifier.weight(1f).aspectRatio(1f))
+                    }
+                }
+            }
+            Text("연한 초록색 날짜는 일정 또는 진료 기록이 있는 날입니다.", color = Color.Gray, fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun AppointmentDialog(existing: HospitalAppointment?, initialDate: String? = null, initialStatus: String? = null, onDismiss: () -> Unit,
     onSave: (String, String, String, String, String) -> Unit, onDelete: (HospitalAppointment) -> Unit) {
     val context = LocalContext.current
     var hospital by remember(existing) { mutableStateOf(existing?.hospital ?: "") }
-    var date by remember(existing) { mutableStateOf(existing?.date ?: SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(System.currentTimeMillis() + 86400000L))) }
+    var date by remember(existing, initialDate) { mutableStateOf(existing?.date ?: initialDate ?: SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(System.currentTimeMillis() + 86400000L))) }
     var time by remember(existing) { mutableStateOf(existing?.time ?: "09:00") }
     var memo by remember(existing) { mutableStateOf(existing?.memo ?: "") }
-    var status by remember(existing) { mutableStateOf(existing?.status ?: "예정") }
+    var status by remember(existing, initialStatus) { mutableStateOf(existing?.status ?: initialStatus ?: "예정") }
     var statusMenu by remember { mutableStateOf(false) }
 
     fun showDatePicker() {
@@ -1291,7 +1412,7 @@ private fun AppointmentDialog(existing: HospitalAppointment?, onDismiss: () -> U
                 }
             }
             OutlinedTextField(value = memo, onValueChange = { memo = it }, label = { Text("진료 내용 / 메모") }, singleLine = true)
-            if (existing != null) {
+            if (existing != null || initialStatus != null) {
                 Box {
                     OutlinedButton(onClick = { statusMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("진료 상태: $status") }
                     DropdownMenu(expanded = statusMenu, onDismissRequest = { statusMenu = false }) {
