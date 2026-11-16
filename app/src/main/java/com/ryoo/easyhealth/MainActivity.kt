@@ -813,7 +813,7 @@ fun EasyHealthApp(context: Context) {
                             val numericValues = if (vital == "혈당") glucoseMeasurementGroups(vitalRows).map { it.average } else vitalRows.mapNotNull { it.value.toDoubleOrNull() }
                             val summaryCount = if (vital == "혈당") glucoseMeasurementGroups(vitalRows).size else vitalRows.size
                             Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text("${vital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                                     if (vitalRows.isEmpty()) {
                                         Text("선택한 기간에 기록이 없습니다.", color = Color.Gray)
