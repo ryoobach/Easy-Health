@@ -43,7 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -108,7 +108,7 @@ private fun riskFor(type: String, value: String, profile: PersonProfile? = null)
     val v = value.trim().toDoubleOrNull()
     return when (type) {
         "당화혈색소 추정치" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 5.7 -> RiskInfo("참고 범위", green); v < 6.5 -> RiskInfo("주의 범위", yellow); else -> RiskInfo("높음", red) }
-        "혈당" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 70 -> RiskInfo("저혈당 주의", red); v <= 180 -> RiskInfo("목표 참고 범위", green); v <= 250 -> RiskInfo("높음", yellow); else -> RiskInfo("매우 높음", red) }
+        "혈당" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 70 -> RiskInfo("저혈당 위험", red); v <= 130 -> RiskInfo("일반 참고 범위", green); v <= 180 -> RiskInfo("높음 · 관리 필요", orange); else -> RiskInfo("매우 높음", red) }
         "혈압" -> {
             val p = value.split("/").mapNotNull { it.toDoubleOrNull() }
             if (p.size < 2) RiskInfo("판정 불가", Color.Gray)
@@ -647,23 +647,39 @@ fun EasyHealthApp(context: Context) {
                                             Canvas(Modifier.weight(1f).fillMaxHeight()) {
                                                 val minV = 50.0
                                                 val maxV = 300.0
-                                                fun yFor(value: Double) = size.height - ((value - minV) / (maxV - minV) * size.height).toFloat()
+                                                val left = 2.dp.toPx()
+                                                val right = size.width - 30.dp.toPx()
+                                                val top = 8.dp.toPx()
+                                                val bottom = size.height - 20.dp.toPx()
+                                                fun xFor(index: Int) = if (chartValues.size == 1) (left + right) / 2f else left + index * (right - left) / (chartValues.size - 1)
+                                                fun yFor(value: Double) = bottom - ((value - minV) / (maxV - minV) * (bottom - top)).toFloat()
+                                                // X/Y 축과 눈금
+                                                drawLine(Color.DarkGray, Offset(left, top), Offset(left, bottom), strokeWidth = 1.5.dp.toPx())
+                                                drawLine(Color.DarkGray, Offset(left, bottom), Offset(right, bottom), strokeWidth = 1.5.dp.toPx())
                                                 listOf(50.0, 100.0, 150.0, 200.0, 250.0, 300.0).forEach { tick ->
-                                                    drawLine(Color.LightGray.copy(alpha = 0.7f), Offset(0f, yFor(tick)), Offset(size.width, yFor(tick)), strokeWidth = 1.dp.toPx())
+                                                    val y = yFor(tick)
+                                                    drawLine(Color.LightGray.copy(alpha = 0.7f), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
                                                 }
-                                                // 일반적인 저혈당 주의선(70)과 식후 목표 참고선(180)
-                                                drawLine(Color(0xFFE09A24), Offset(0f, yFor(70.0)), Offset(size.width, yFor(70.0)), strokeWidth = 1.5.dp.toPx())
-                                                drawLine(Color(0xFF269B62), Offset(0f, yFor(180.0)), Offset(size.width, yFor(180.0)), strokeWidth = 1.5.dp.toPx())
-                                                val pts = chartValues.mapIndexed { index, pair ->
-                                                    Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1),
-                                                        yFor(pair.second.coerceIn(minV, maxV)))
-                                                }
-                                                for (i in 0 until pts.lastIndex) {
-                                                    val c = riskFor(selectedReportVital, chartValues[i + 1].first.value, selectedProfile).color
-                                                    drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
-                                                }
-                                                pts.forEachIndexed { index, point ->
-                                                    drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point)
+                                                // 70 미만 저혈당, 130 초과 상승 구간을 구분하는 참고선
+                                                drawLine(Color(0xFFD32F2F), Offset(left, yFor(70.0)), Offset(right, yFor(70.0)), strokeWidth = 1.5.dp.toPx())
+                                                drawLine(Color(0xFFEF6C00), Offset(left, yFor(130.0)), Offset(right, yFor(130.0)), strokeWidth = 1.5.dp.toPx())
+                                                chartValues.forEachIndexed { index, pair ->
+                                                    val risk = riskFor(selectedReportVital, pair.first.value, selectedProfile)
+                                                    val point = Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV)))
+                                                    drawCircle(risk.color, radius = 5.dp.toPx(), center = point)
+                                                    if (pair.second < 70.0 || pair.second > 130.0) {
+                                                        drawContext.canvas.nativeCanvas.drawText(
+                                                            pair.second.toInt().toString(),
+                                                            point.x + 5.dp.toPx(),
+                                                            (point.y - 7.dp.toPx()).coerceAtLeast(top + 8.dp.toPx()),
+                                                            android.graphics.Paint().apply {
+                                                                color = risk.color.toArgb()
+                                                                textSize = 10.dp.toPx()
+                                                                isFakeBoldText = true
+                                                                textAlign = android.graphics.Paint.Align.LEFT
+                                                            }
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
