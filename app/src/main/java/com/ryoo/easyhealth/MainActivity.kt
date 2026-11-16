@@ -351,6 +351,7 @@ fun EasyHealthApp(context: Context) {
     var deviceHelpTarget by remember { mutableStateOf<String?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
     val personRecords = records.filter { it.person == selectedPerson }.sortedByDescending { it.timestamp }
+    val selectedProfile = personProfiles[selectedPerson] ?: PersonProfile(selectedPerson)
     val activeTypes = devices.filter { enabledDevices.contains(it.first) && registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
     val reportRecords = personRecords.filter { activeTypes.contains(it.type) }
     val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
@@ -393,7 +394,7 @@ fun EasyHealthApp(context: Context) {
                         TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
                             Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
                         }
-                        IconButton(onClick = { newPerson = ""; showPeopleDialog = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green, modifier = Modifier.size(18.dp)) }
+                        IconButton(onClick = { personEditing = PersonProfile("") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green, modifier = Modifier.size(18.dp)) }
                         IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "홈", tint = Green, modifier = Modifier.size(18.dp))
                         }
@@ -427,7 +428,8 @@ fun EasyHealthApp(context: Context) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold)
-                                            Text(glucoseRecord?.value ?: "--", color = Green, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                            Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                            glucoseRecord?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
                                             Text("mg/dL", color = Green, fontSize = 11.sp)
                                             Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 10.sp)
                                         }
@@ -449,7 +451,8 @@ fun EasyHealthApp(context: Context) {
                                     Card(Modifier.width(158.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text("혈압 · 맥박", color = Ink, fontWeight = FontWeight.SemiBold)
-                                            Text(if (systolic != null && diastolic != null) "$systolic/$diastolic" else "--/--", color = Green, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                                            Text(if (systolic != null && diastolic != null) "$systolic/$diastolic" else "--/--", color = bp?.let { riskFor("혈압", it.value, selectedProfile).color } ?: Color.Gray, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                                            bp?.let { Text(riskFor("혈압", it.value, selectedProfile).label, color = riskFor("혈압", it.value, selectedProfile).color, fontSize = 10.sp) }
                                             Text("mmHg", color = Green, fontSize = 11.sp)
                                             Text("맥박 ${pulse ?: "--"}회/분", color = Ink, fontSize = 12.sp)
                                         }
@@ -460,7 +463,8 @@ fun EasyHealthApp(context: Context) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text("체온", color = Ink, fontWeight = FontWeight.SemiBold)
-                                            Text(latest?.value ?: "--", color = Green, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                            Text(latest?.value ?: "--", color = latest?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                            latest?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 10.sp) }
                                             Text("℃", color = Green, fontSize = 11.sp)
                                             Text(latest?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 10.sp)
                                         }
@@ -475,7 +479,7 @@ fun EasyHealthApp(context: Context) {
                                                 val latest = personRecords.firstOrNull { it.type == scaleType }
                                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                     Text(if (scaleType == "체중") "몸무게" else scaleType, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                                    Text((latest?.value ?: "--") + (units[scaleType]?.let { " $it" } ?: ""), color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                    Text((latest?.value ?: "--") + (units[scaleType]?.let { " $it" } ?: ""), color = latest?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                                 }
                                             }
                                         }
@@ -487,7 +491,8 @@ fun EasyHealthApp(context: Context) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text(vital, color = Ink, fontWeight = FontWeight.SemiBold)
-                                            Text(latest?.value ?: "--", color = Green, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                            Text(latest?.value ?: "--", color = latest?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                            latest?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 10.sp) }
                                             Text(units[vital] ?: "", color = Green, fontSize = 11.sp)
                                             Text(latest?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 10.sp)
                                         }
@@ -533,8 +538,12 @@ fun EasyHealthApp(context: Context) {
                                         Text(dateFormat.format(Date(record.timestamp)), color = Color.Gray, fontSize = 10.sp, lineHeight = 12.sp)
                                         Text(record.source + if (record.note.isNotBlank()) " · " + record.note else "", color = Color.Gray, fontSize = 10.sp, lineHeight = 12.sp)
                                     }
-                                    Text(record.value + (units[record.type]?.let { if (it.isNotBlank()) " $it" else "" } ?: ""),
-                                        color = Green, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        val risk = riskFor(record.type, record.value, selectedProfile)
+                                        Text(record.value + (units[record.type]?.let { if (it.isNotBlank()) " $it" else "" } ?: ""),
+                                            color = risk.color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                        Text(risk.label, color = risk.color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                    }
                                 }
                             }
                         }
@@ -609,6 +618,39 @@ fun EasyHealthApp(context: Context) {
                     } else {
                         val selectedRows = periodRecords.filter { it.type == selectedReportVital }.sortedByDescending { it.timestamp }
                         val numericValues = selectedRows.mapNotNull { it.value.toDoubleOrNull() }
+                        val chartRows = selectedRows.asReversed().takeLast(30)
+                        val chartValues = chartRows.mapNotNull { row ->
+                            val n = if (selectedReportVital == "혈압") row.value.substringBefore("/").toDoubleOrNull() else row.value.toDoubleOrNull()
+                            n?.let { row to it }
+                        }
+                        if (chartValues.isNotEmpty()) {
+                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("${selectedReportVital} 측정 추이 · 최근 ${chartValues.size}회", color = Ink, fontWeight = FontWeight.SemiBold)
+                                    Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+                                        val vals = chartValues.map { it.second }
+                                        val minV = (vals.minOrNull() ?: 0.0)
+                                        val maxV = (vals.maxOrNull() ?: 1.0)
+                                        val span = (maxV - minV).takeIf { it > 0.0 } ?: 1.0
+                                        val pts = chartValues.mapIndexed { index, pair ->
+                                            Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1), size.height - ((pair.second - minV) / span * (size.height - 18.dp.toPx())).toFloat() - 9.dp.toPx())
+                                        }
+                                        for (i in 0 until pts.lastIndex) {
+                                            val c = riskFor(selectedReportVital, chartValues[i + 1].second.toString(), selectedProfile).color
+                                            drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
+                                        }
+                                        pts.forEachIndexed { index, point ->
+                                            drawCircle(riskFor(selectedReportVital, chartValues[index].second.toString(), selectedProfile).color, radius = 5.dp.toPx(), center = point)
+                                        }
+                                    }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(chartValues.firstOrNull()?.first?.let { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
+                                        Text(chartValues.lastOrNull()?.first?.let { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
+                                    }
+                                    Text("초록: 참고 범위 · 노랑/주황: 주의 · 빨강: 위험 신호 · 파랑: 개인별 참고", color = Color.Gray, fontSize = 10.sp)
+                                }
+                            }
+                        }
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text("${selectedReportVital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
@@ -623,7 +665,8 @@ fun EasyHealthApp(context: Context) {
                                         Text("평균 맥박 ${bp.map { it[2] }.average().toInt()}회/분 · 총 ${selectedRows.size}회", color = Ink, fontSize = 12.sp)
                                     } else Text("총 ${selectedRows.size}회 측정", color = Green, fontWeight = FontWeight.Bold)
                                 } else if (numericValues.isNotEmpty()) {
-                                    Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[selectedReportVital] ?: ""}", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                    Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[selectedReportVital] ?: ""}", color = riskFor(selectedReportVital, numericValues.average().toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                    Text("평균 기준: ${riskFor(selectedReportVital, numericValues.average().toString(), selectedProfile).label}", color = riskFor(selectedReportVital, numericValues.average().toString(), selectedProfile).color, fontSize = 11.sp)
                                     Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${selectedRows.size}회", color = Ink, fontSize = 12.sp)
                                 } else Text("총 ${selectedRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                 selectedRows.firstOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
@@ -636,7 +679,8 @@ fun EasyHealthApp(context: Context) {
                                     selectedRows.take(100).forEach { row ->
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Text(dateFormat.format(Date(row.timestamp)), color = Color.Gray, fontSize = 10.sp, modifier = Modifier.weight(1.4f))
-                                            Text(row.value + (units[selectedReportVital]?.let { if (it.isBlank()) "" else " $it" } ?: ""), color = Green, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                            Text(row.value + (units[selectedReportVital]?.let { if (it.isBlank()) "" else " $it" } ?: "") + " · " + riskFor(selectedReportVital, row.value, selectedProfile).label,
+                                                color = riskFor(selectedReportVital, row.value, selectedProfile).color, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                         }
                                     }
                                 }
@@ -863,31 +907,74 @@ fun EasyHealthApp(context: Context) {
     if (showPeopleDialog) {
         AlertDialog(onDismissRequest = { showPeopleDialog = false }, title = { Text("측정 대상자") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     people.forEach { person ->
-                        Row(Modifier.fillMaxWidth().clickable {
-                            selectedPerson = person
-                            prefs.edit().putString("selected_person", person).apply()
-                            showPeopleDialog = false
-                        }, verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = selectedPerson == person, onClick = {
-                                selectedPerson = person; prefs.edit().putString("selected_person", person).apply(); showPeopleDialog = false
-                            })
-                            Text(person)
+                        val profile = personProfiles[person] ?: PersonProfile(person)
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8)), shape = RoundedCornerShape(12.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(selected = selectedPerson == person, onClick = {
+                                        selectedPerson = person; prefs.edit().putString("selected_person", person).apply(); showPeopleDialog = false
+                                    })
+                                    Column(Modifier.weight(1f).clickable {
+                                        selectedPerson = person; prefs.edit().putString("selected_person", person).apply(); showPeopleDialog = false
+                                    }) {
+                                        Text(person, color = Ink, fontWeight = FontWeight.SemiBold)
+                                        Text(listOf(profile.sex, profile.age?.let { "${it}세" }, profile.heightCm?.let { "${it}cm" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "추가 정보 없음" }, color = Color.Gray, fontSize = 11.sp)
+                                    }
+                                    TextButton(onClick = { personEditing = profile }) { Text("수정") }
+                                    TextButton(onClick = { personDeleteTarget = person }, enabled = people.size > 1) { Text("삭제", color = Color.Red) }
+                                }
+                            }
                         }
                     }
-                    OutlinedTextField(value = newPerson, onValueChange = { newPerson = it }, label = { Text("새 대상자 이름") }, singleLine = true)
                 }
             },
-            confirmButton = { TextButton(onClick = {
-                val name = newPerson.trim()
-                if (name.isNotBlank() && !people.contains(name)) {
-                    people.add(name); prefs.edit().putString("people", JSONArray(people).toString()).apply()
-                    selectedPerson = name; prefs.edit().putString("selected_person", name).apply()
-                }
-                newPerson = ""; showPeopleDialog = false
-            }) { Text("추가") } },
+            confirmButton = { TextButton(onClick = { personEditing = PersonProfile(""); showPeopleDialog = false }) { Text("대상자 추가") } },
             dismissButton = { TextButton(onClick = { showPeopleDialog = false }) { Text("닫기") } })
+    }
+    personEditing?.let { original ->
+        PersonProfileDialog(existing = original, onDismiss = { personEditing = null }, onSave = { updated ->
+            val oldName = original.name
+            val newName = updated.name.trim()
+            if (newName.isNotBlank() && (oldName.isBlank() || oldName == newName || !people.contains(newName))) {
+                if (oldName.isNotBlank() && oldName != newName) {
+                    val index = people.indexOf(oldName)
+                    if (index >= 0) people[index] = newName
+                    records.indices.filter { records[it].person == oldName }.forEach { i -> records[i] = records[i].copy(person = newName) }
+                    if (selectedPerson == oldName) {
+                        selectedPerson = newName
+                        prefs.edit().putString("selected_person", newName).apply()
+                    }
+                    personProfiles.remove(oldName)
+                } else if (oldName.isBlank()) {
+                    people.add(newName)
+                    selectedPerson = newName
+                    prefs.edit().putString("selected_person", newName).apply()
+                }
+                personProfiles[newName] = updated.copy(name = newName)
+                prefs.edit().putString("people", JSONArray(people).toString()).apply()
+                saveProfiles()
+                persistRecords(context, records)
+            }
+            personEditing = null
+        })
+    }
+    personDeleteTarget?.let { target ->
+        AlertDialog(onDismissRequest = { personDeleteTarget = null }, title = { Text("측정 대상자 삭제") },
+            text = { Text("${target} 대상자와 해당 대상자의 측정 기록도 함께 삭제하시겠습니까?") },
+            confirmButton = { TextButton(onClick = {
+                records.removeAll { it.person == target }
+                people.remove(target); personProfiles.remove(target)
+                if (selectedPerson == target) {
+                    selectedPerson = people.first()
+                    prefs.edit().putString("selected_person", selectedPerson).apply()
+                }
+                prefs.edit().putString("people", JSONArray(people).toString()).apply()
+                saveProfiles(); persistRecords(context, records)
+                personDeleteTarget = null
+            }) { Text("삭제", color = Color.Red) } },
+            dismissButton = { TextButton(onClick = { personDeleteTarget = null }) { Text("취소") } })
     }
     if (showDeviceInfo) {
         val savedMeters = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
