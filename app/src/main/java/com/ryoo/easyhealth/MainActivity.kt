@@ -88,18 +88,61 @@ data class VitalRecord(
 
 
 
-private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null)
+private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null, val wakeTime: String = "", val breakfastTime: String = "", val lunchTime: String = "", val dinnerTime: String = "", val bedtime: String = "")
 
 private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
     val array = JSONArray()
     profiles.values.forEach { p ->
         array.put(JSONObject().put("name", p.name).put("sex", p.sex)
-            .put("age", p.age ?: JSONObject.NULL).put("heightCm", p.heightCm ?: JSONObject.NULL))
+            .put("age", p.age ?: JSONObject.NULL).put("heightCm", p.heightCm ?: JSONObject.NULL)
+            .put("wakeTime", p.wakeTime).put("breakfastTime", p.breakfastTime).put("lunchTime", p.lunchTime)
+            .put("dinnerTime", p.dinnerTime).put("bedtime", p.bedtime))
     }
     return array.toString()
 }
 
 private data class RiskInfo(val label: String, val color: Color)
+
+private data class MealPeriod(val label: String, val color: Color)
+
+private fun mealPeriodFor(timestamp: Long, profile: PersonProfile): MealPeriod? {
+    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+    val minute = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + calendar.get(java.util.Calendar.MINUTE)
+    fun parse(value: String): Int? {
+        val parts = value.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val min = parts.getOrNull(1)?.toIntOrNull() ?: return null
+        return if (hour in 0..23 && min in 0..59) hour * 60 + min else null
+    }
+    fun inWindow(start: Int, end: Int): Boolean =
+        if (start <= end) minute >= start && minute < end else minute >= start || minute < end
+    fun before(time: Int, minutes: Int) = (time - minutes + 1440) % 1440
+    fun after(time: Int, minutes: Int) = (time + minutes) % 1440
+
+    val wake = parse(profile.wakeTime)
+    val breakfast = parse(profile.breakfastTime)
+    val lunch = parse(profile.lunchTime)
+    val dinner = parse(profile.dinnerTime)
+    val bed = parse(profile.bedtime)
+    if (bed != null && inWindow(before(bed, 60), bed))
+        return MealPeriod("취침전", Color(0xFF8E44AD))
+    val meals = listOf(
+        Triple("아침", breakfast, Color(0xFF1976D2)),
+        Triple("점심", lunch, Color(0xFF00897B)),
+        Triple("저녁", dinner, Color(0xFFEF6C00))
+    )
+    meals.forEach { (name, time, color) ->
+        if (time != null && inWindow(before(time, 30), time))
+            return MealPeriod("${name}식전", color)
+    }
+    meals.forEach { (name, time, color) ->
+        if (time != null && inWindow(time, after(time, 120)))
+            return MealPeriod("${name}식후", color)
+    }
+    if (wake != null && breakfast != null && inWindow(wake, before(breakfast, 30)))
+        return MealPeriod("공복", Color(0xFF3949AB))
+    return null
+}
 
 private fun riskFor(type: String, value: String, profile: PersonProfile? = null): RiskInfo {
     val red = Color(0xFFD32F2F)
@@ -234,7 +277,9 @@ fun EasyHealthApp(context: Context) {
                     val name = o.optString("name")
                     if (name.isNotBlank()) put(name, PersonProfile(name, o.optString("sex"),
                         if (o.isNull("age")) null else o.optInt("age"),
-                        if (o.isNull("heightCm")) null else o.optDouble("heightCm")))
+                        if (o.isNull("heightCm")) null else o.optDouble("heightCm"),
+                        o.optString("wakeTime", ""), o.optString("breakfastTime", ""), o.optString("lunchTime", ""),
+                        o.optString("dinnerTime", ""), o.optString("bedtime", "")))
                 }
             } catch (_: Exception) { }
             people.forEach { if (!containsKey(it)) put(it, PersonProfile(it)) }
@@ -434,20 +479,20 @@ fun EasyHealthApp(context: Context) {
                                 val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
                                 if (activeTypes.contains("혈당")) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Column(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                                             Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                                Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                                                Text("mg/dL", color = Green, fontSize = 10.sp, modifier = Modifier.padding(bottom = 4.dp))
+                                            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                                Text("mg/dL", color = Green, fontSize = 9.sp, modifier = Modifier.padding(bottom = 4.dp))
                                             }
                                             glucoseRecord?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }
-                                            Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 9.sp)
-                                            HorizontalDivider(color = Color(0xFFD5E8D9), thickness = 1.dp)
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                                Text("당화혈색소", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 10.sp)
-                                                Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                            Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 8.sp)
+                                            HorizontalDivider(color = Color(0xFFD5E8D9), thickness = 1.dp, modifier = Modifier.padding(vertical = 3.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("당화혈색소", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 9.sp)
+                                                Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                             }
-                                            Text("최근 90일 평균 혈당 기반 추정", color = Color.Gray, fontSize = 8.sp)
+                                            Text("최근 90일 평균 혈당 기반 추정", color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp)
                                         }
                                     }
                                 }
@@ -550,6 +595,9 @@ fun EasyHealthApp(context: Context) {
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
                                         val risk = riskFor(record.type, record.value, selectedProfile)
+                                        mealPeriodFor(record.timestamp, selectedProfile)?.let { period ->
+                                            Text(period.label, color = period.color, fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+                                        }
                                         Text(record.value + (units[record.type]?.let { if (it.isNotBlank()) " $it" else "" } ?: ""),
                                             color = risk.color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                         Text(risk.label, color = risk.color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
@@ -1023,16 +1071,35 @@ fun EasyHealthApp(context: Context) {
 
 
 @Composable
+private fun ProfileTimeRow(label: String, value: String, onChange: (String) -> Unit) {
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        OutlinedButton(onClick = {
+            val parts = value.split(":")
+            val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 7
+            val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+            TimePickerDialog(context, { _, h, m -> onChange(String.format(Locale.KOREA, "%02d:%02d", h, m)) }, hour, minute, true).show()
+        }) { Text(value.ifBlank { "시간 선택" }, fontSize = 12.sp) }
+    }
+}
+
+@Composable
 private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, onSave: (PersonProfile) -> Unit) {
     var name by remember(existing) { mutableStateOf(existing.name) }
     var sex by remember(existing) { mutableStateOf(existing.sex) }
     var age by remember(existing) { mutableStateOf(existing.age?.toString() ?: "") }
     var height by remember(existing) { mutableStateOf(existing.heightCm?.toString() ?: "") }
+    var wakeTime by remember(existing) { mutableStateOf(existing.wakeTime) }
+    var breakfastTime by remember(existing) { mutableStateOf(existing.breakfastTime) }
+    var lunchTime by remember(existing) { mutableStateOf(existing.lunchTime) }
+    var dinnerTime by remember(existing) { mutableStateOf(existing.dinnerTime) }
+    var bedtime by remember(existing) { mutableStateOf(existing.bedtime) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (existing.name.isBlank()) "측정 대상자 추가" else "측정 대상자 정보 수정") },
         text = {
-            Column(Modifier.heightIn(max = 430.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("이름") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("성별", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1044,6 +1111,13 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = height, onValueChange = { height = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("키 (cm)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("생활 시간", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                ProfileTimeRow("기상 시간", wakeTime) { wakeTime = it }
+                ProfileTimeRow("아침 식사 시간", breakfastTime) { breakfastTime = it }
+                ProfileTimeRow("점심 식사 시간", lunchTime) { lunchTime = it }
+                ProfileTimeRow("저녁 식사 시간", dinnerTime) { dinnerTime = it }
+                ProfileTimeRow("취침 시간", bedtime) { bedtime = it }
+                Text("입력한 생활 시간을 기준으로 측정 기록에 공복·식전·식후·취침 전 표시를 붙입니다. 식전은 식사 30분 전, 식후는 식사 후 2시간, 취침 전은 취침 1시간 전 기준입니다.", color = Color.Gray, fontSize = 10.sp)
                 Text("키를 입력하면 체중 기록에서 BMI를 계산해 위험 참고 색상에 반영합니다. 성별과 나이는 개인별 리포트 해석에 활용합니다.", color = Color.Gray, fontSize = 11.sp)
             }
         },
@@ -1052,7 +1126,7 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                 val a = age.toIntOrNull()
                 val h = height.toDoubleOrNull()
                 if (name.trim().isNotBlank() && (age.isBlank() || a in 0..120) && (height.isBlank() || (h != null && h in 30.0..250.0))) {
-                    onSave(PersonProfile(name.trim(), sex, a, h))
+                    onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime))
                 }
             }) { Text("저장") }
         },
