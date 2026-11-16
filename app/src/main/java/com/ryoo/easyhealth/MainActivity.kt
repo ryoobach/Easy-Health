@@ -590,7 +590,6 @@ fun EasyHealthApp(context: Context) {
                         Text("짧게 누르면 리포트 포함 여부를 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
                     Text("실제 블루투스 연결과 자동 수집은 기기별 호환성 확인 후 지원됩니다.", color = Color.Gray, fontSize = 12.sp)
-                    Button(onClick = { tab = "리포트" }, modifier = Modifier.fillMaxWidth()) { Text("설정 완료") }
                 }
             }
         }
@@ -813,12 +812,12 @@ private fun RecordDialog(
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "측정 기록 추가" else "측정 기록 수정") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                Text("측정 항목", color = Ink, fontWeight = FontWeight.SemiBold)
                 val inputGroups = listOf(
-                    "혈당계" to listOf("혈당"),
-                    "혈압계" to listOf("혈압"),
-                    "체온계" to listOf("체온"),
-                    "체중계" to listOf("체중", "체지방률", "골격근량", "BMI"),
+                    "혈당" to listOf("혈당"),
+                    "혈압" to listOf("혈압"),
+                    "체중" to listOf("체중"),
+                    "체온" to listOf("체온"),
+                    "체중계 기타" to listOf("체지방률", "골격근량", "BMI"),
                     "기타 바이탈" to listOf("호흡수", "산소포화도", "심전도"),
                     "케톤 측정" to listOf("케톤"),
                     "생활 기록" to listOf("식사", "운동", "수면", "특이사항")
@@ -852,7 +851,6 @@ private fun RecordDialog(
                     IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시계에서 시간 선택", tint = Green) }
                 }
                 OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("메모 (선택)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("측정 대상: $person", color = Color.Gray, fontSize = 12.sp)
                 if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("이 기록 삭제", color = Color.Red) }
             }
         },
