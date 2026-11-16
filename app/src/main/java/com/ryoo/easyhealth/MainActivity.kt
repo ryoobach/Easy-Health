@@ -315,19 +315,18 @@ fun EasyHealthApp(context: Context) {
                     }
                 }, actions = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Spacer(Modifier.width(16.dp))
-                        TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                        TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 3.dp)) {
                             Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
                         }
-                        IconButton(onClick = { newPerson = ""; showPeopleDialog = true }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green) }
-                        IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }) {
-                            Icon(Icons.Default.Home, contentDescription = "홈", tint = Green)
+                        IconButton(onClick = { newPerson = ""; showPeopleDialog = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green, modifier = Modifier.size(18.dp)) }
+                        IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Home, contentDescription = "홈", tint = Green, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { showAppInfo = true }) {
-                            Icon(Icons.Default.Info, contentDescription = "앱정보", tint = Green)
+                        IconButton(onClick = { showAppInfo = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Info, contentDescription = "앱정보", tint = Green, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "앱종료", tint = Green)
+                        IconButton(onClick = { (context as? Activity)?.finishAndRemoveTask() }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = "앱종료", tint = Green, modifier = Modifier.size(18.dp))
                         }
                     }
                 }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF4F8F5)))
@@ -429,7 +428,7 @@ fun EasyHealthApp(context: Context) {
                         Text("${personRecords.size}건", color = Color.Gray, fontSize = 12.sp)
                     }
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("측정 기록 추가", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
                             Button(onClick = { editing = null; showRecordDialog = true }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("측정 기록 추가")
