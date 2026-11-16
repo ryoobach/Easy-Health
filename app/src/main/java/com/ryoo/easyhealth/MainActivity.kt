@@ -899,7 +899,7 @@ fun EasyHealthApp(context: Context) {
         )
     }
     if (showRecordDialog) {
-        RecordDialog(selectedPerson, editing, onDismiss = { showRecordDialog = false }, onSave = { type, value, note, source, timestamp ->
+        RecordDialog(selectedPerson, editing, registeredDevices.toList(), onDismiss = { showRecordDialog = false }, onSave = { type, value, note, source, timestamp ->
             val candidate = VitalRecord(editing?.id ?: UUID.randomUUID().toString(), selectedPerson, type, value, timestamp, source, note, editing?.externalId ?: "")
             val duplicate = records.any { old ->
                 old.id != candidate.id && old.person == candidate.person && old.type == candidate.type &&
@@ -1064,19 +1064,32 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
 private fun RecordDialog(
     person: String,
     existing: VitalRecord?,
+    registeredDevices: List<String>,
     onDismiss: () -> Unit,
     onSave: (String, String, String, String, Long) -> Unit,
     onDelete: (VitalRecord) -> Unit
 ) {
     val context = LocalContext.current
-    var type by remember(existing) { mutableStateOf(existing?.type ?: "혈당") }
+    val availableDevices = registeredDevices.mapNotNull { name ->
+        devices.firstOrNull { it.first == name }
+    }
+    var selectedDevice by remember(existing, registeredDevices) {
+        mutableStateOf(
+            availableDevices.firstOrNull { it.first == existing?.source }?.first
+                ?: availableDevices.firstOrNull { device -> existing?.type in device.second }?.first
+                ?: availableDevices.firstOrNull()?.first.orEmpty()
+        )
+    }
+    val availableTypes = availableDevices.firstOrNull { it.first == selectedDevice }?.second ?: emptyList()
+    var type by remember(existing, selectedDevice) {
+        mutableStateOf(existing?.type?.takeIf { it in availableTypes } ?: availableTypes.firstOrNull().orEmpty())
+    }
     var value by remember(existing) { mutableStateOf(existing?.value ?: "") }
     val existingBp = remember(existing) { existing?.value?.split("/") ?: emptyList() }
     var systolic by remember(existing) { mutableStateOf(existingBp.getOrNull(0) ?: "") }
     var diastolic by remember(existing) { mutableStateOf(existingBp.getOrNull(1) ?: "") }
     var pulse by remember(existing) { mutableStateOf(existingBp.getOrNull(2) ?: "") }
     var note by remember(existing) { mutableStateOf(existing?.note ?: "") }
-    var source by remember(existing) { mutableStateOf(existing?.source ?: "직접 입력") }
     var measuredDate by remember(existing) { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(existing?.timestamp ?: System.currentTimeMillis()))) }
     var measuredTime by remember(existing) { mutableStateOf(SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(existing?.timestamp ?: System.currentTimeMillis()))) }
     fun showDatePicker() {
@@ -1092,47 +1105,50 @@ private fun RecordDialog(
     }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "측정 기록 추가" else "측정 기록 수정") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                val inputGroups = listOf(
-                    "혈당" to listOf("혈당"),
-                    "혈압" to listOf("혈압"),
-                    "체중" to listOf("체중"),
-                    "체온" to listOf("체온"),
-                    "체중계 기타" to listOf("체지방률", "골격근량", "BMI"),
-                    "기타 바이탈" to listOf("호흡수", "산소포화도", "심전도"),
-                    "케톤 측정" to listOf("케톤"),
-                    "생활 기록" to listOf("식사", "운동", "수면", "특이사항")
-                )
-                inputGroups.forEach { (groupName, groupTypes) ->
-                    Text(groupName, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        groupTypes.filter { it in vitalTypes }.forEach { item ->
-                            FilterChip(selected = type == item, onClick = { type = item }, label = { Text(item, fontSize = 12.sp) })
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 500.dp).verticalScroll(rememberScrollState())) {
+                if (availableDevices.isEmpty()) {
+                    Text("먼저 기기 설정에서 측정기를 등록해 주세요.", color = Color.Gray)
+                } else {
+                    Text("등록된 측정기", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    ScrollableTabRow(selectedTabIndex = availableDevices.indexOfFirst { it.first == selectedDevice }.coerceAtLeast(0), edgePadding = 0.dp) {
+                        availableDevices.forEach { device ->
+                            Tab(selected = selectedDevice == device.first, onClick = {
+                                selectedDevice = device.first
+                                type = device.second.firstOrNull().orEmpty()
+                                value = ""
+                                systolic = ""; diastolic = ""; pulse = ""
+                            }, text = { Text(device.first, fontSize = 11.sp) })
                         }
                     }
-                }
-                if (type == "혈당") {
-                    Text("당화혈색소 추정치는 최근 혈당 기록을 바탕으로 자동 계산됩니다.", color = Color.Gray, fontSize = 11.sp)
-                }
-                if (type == "혈압") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedTextField(value = systolic, onValueChange = { systolic = it }, label = { Text("수축기") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(value = diastolic, onValueChange = { diastolic = it }, label = { Text("이완기") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                    Text("측정 항목", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        availableTypes.forEach { item ->
+                            FilterChip(selected = type == item, onClick = { type = item; value = "" }, label = { Text(item, fontSize = 12.sp) })
+                        }
                     }
-                    OutlinedTextField(value = pulse, onValueChange = { pulse = it }, label = { Text("맥박 (회/분)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
-                } else {
-                    OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("측정값 ${units[type]?.let { "($it)" } ?: ""}") }, keyboardOptions = KeyboardOptions(keyboardType = if (type in listOf("식사", "운동", "수면", "특이사항")) KeyboardType.Text else KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    if (type == "혈당") {
+                        Text("당화혈색소 추정치는 최근 혈당 기록을 바탕으로 자동 계산됩니다.", color = Color.Gray, fontSize = 11.sp)
+                    }
+                    if (type == "혈압") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(value = systolic, onValueChange = { systolic = it }, label = { Text("수축기 (mmHg)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                            OutlinedTextField(value = diastolic, onValueChange = { diastolic = it }, label = { Text("이완기 (mmHg)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                        }
+                        OutlinedTextField(value = pulse, onValueChange = { pulse = it }, label = { Text("맥박 (회/분)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    } else {
+                        OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("측정값 ${units[type]?.let { "($it)" } ?: ""}") }, keyboardOptions = KeyboardOptions(keyboardType = if (type in listOf("식사", "운동", "수면", "특이사항", "심전도")) KeyboardType.Text else KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = measuredDate, onValueChange = { measuredDate = it }, label = { Text("측정 날짜") }, singleLine = true, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "달력에서 날짜 선택", tint = Green) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = measuredTime, onValueChange = { measuredTime = it }, label = { Text("측정 시간") }, singleLine = true, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시계에서 시간 선택", tint = Green) }
+                    }
+                    OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("메모 (선택)") }, modifier = Modifier.fillMaxWidth())
+                    if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("이 기록 삭제", color = Color.Red) }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = measuredDate, onValueChange = { measuredDate = it }, label = { Text("측정 날짜") }, singleLine = true, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "달력에서 날짜 선택", tint = Green) }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = measuredTime, onValueChange = { measuredTime = it }, label = { Text("측정 시간") }, singleLine = true, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시계에서 시간 선택", tint = Green) }
-                }
-                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("메모 (선택)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("이 기록 삭제", color = Color.Red) }
             }
         },
         confirmButton = { TextButton(onClick = {
@@ -1140,8 +1156,8 @@ private fun RecordDialog(
             val timestamp = try { fmt.parse("$measuredDate $measuredTime")?.time } catch (_: Exception) { null }
             val savedValue = if (type == "혈압") "${systolic.trim()}/${diastolic.trim()}/${pulse.trim()}" else value.trim()
             val validValue = if (type == "혈압") systolic.isNotBlank() && diastolic.isNotBlank() && pulse.isNotBlank() else value.trim().isNotEmpty()
-            if (validValue && timestamp != null) onSave(type, savedValue, note.trim(), source, timestamp)
-        }) { Text("확인") } },
+            if (availableDevices.isNotEmpty() && type.isNotBlank() && validValue && timestamp != null) onSave(type, savedValue, note.trim(), selectedDevice, timestamp)
+        }, enabled = availableDevices.isNotEmpty()) { Text("저장") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
 }
 
