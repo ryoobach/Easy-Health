@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -42,6 +43,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -81,6 +83,58 @@ data class VitalRecord(
     val externalId: String = ""
 )
 
+
+
+private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null)
+
+private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
+    val array = JSONArray()
+    profiles.values.forEach { p ->
+        array.put(JSONObject().put("name", p.name).put("sex", p.sex)
+            .put("age", p.age ?: JSONObject.NULL).put("heightCm", p.heightCm ?: JSONObject.NULL))
+    }
+    return array.toString()
+}
+
+private data class RiskInfo(val label: String, val color: Color)
+
+private fun riskFor(type: String, value: String, profile: PersonProfile? = null): RiskInfo {
+    val red = Color(0xFFD32F2F)
+    val orange = Color(0xFFEF6C00)
+    val yellow = Color(0xFFF9A825)
+    val green = Color(0xFF16834A)
+    val blue = Color(0xFF3976B8)
+    val v = value.trim().toDoubleOrNull()
+    return when (type) {
+        "혈당" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 70 -> RiskInfo("저혈당 주의", red); v <= 180 -> RiskInfo("목표 참고 범위", green); v <= 250 -> RiskInfo("높음", yellow); else -> RiskInfo("매우 높음", red) }
+        "혈압" -> {
+            val p = value.split("/").mapNotNull { it.toDoubleOrNull() }
+            if (p.size < 2) RiskInfo("판정 불가", Color.Gray)
+            else when {
+                p[0] < 90 || p[1] < 60 -> RiskInfo("낮음", orange)
+                p[0] >= 140 || p[1] >= 90 -> RiskInfo("높음", red)
+                p[0] >= 130 || p[1] >= 80 -> RiskInfo("주의", orange)
+                p[0] >= 120 -> RiskInfo("상승", yellow)
+                else -> RiskInfo("참고 범위", green)
+            }
+        }
+        "체온" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 35.5 -> RiskInfo("낮은 체온", orange); v < 37.5 -> RiskInfo("참고 범위", green); v < 38.0 -> RiskInfo("미열 가능", yellow); else -> RiskInfo("발열 가능", red) }
+        "산소포화도" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v <= 92 -> RiskInfo("낮음", red); v <= 94 -> RiskInfo("주의", yellow); else -> RiskInfo("참고 범위", green) }
+        "케톤" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 0.6 -> RiskInfo("참고 범위", green); v <= 1.5 -> RiskInfo("주의", yellow); v <= 3.0 -> RiskInfo("높음", orange); else -> RiskInfo("매우 높음", red) }
+        "호흡수" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 10 || v > 24 -> RiskInfo("주의", red); v < 12 || v > 20 -> RiskInfo("경계", yellow); else -> RiskInfo("참고 범위", green) }
+        "맥박" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 50 || v > 120 -> RiskInfo("주의", red); v < 60 || v > 100 -> RiskInfo("경계", yellow); else -> RiskInfo("참고 범위", green) }
+        "BMI" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 18.5 -> RiskInfo("저체중 범주", yellow); v < 25 -> RiskInfo("참고 범위", green); v < 30 -> RiskInfo("과체중 범주", yellow); else -> RiskInfo("비만 범주", red) }
+        "체중" -> {
+            val h = profile?.heightCm?.div(100.0)
+            val bmi = if (v != null && h != null && h > 0) v / (h * h) else null
+            when { bmi == null -> RiskInfo("추세 참고", blue); bmi < 18.5 -> RiskInfo("BMI 낮음", yellow); bmi < 25 -> RiskInfo("BMI 참고 범위", green); bmi < 30 -> RiskInfo("BMI 높음", yellow); else -> RiskInfo("BMI 매우 높음", red) }
+        }
+        "체지방률", "골격근량" -> RiskInfo("개인별 기준 참고", blue)
+        "심전도" -> RiskInfo("측정 결과 참고", blue)
+        "식사", "운동", "수면", "특이사항" -> RiskInfo("생활 기록", blue)
+        else -> RiskInfo("참고 정보", blue)
+    }
+}
 
 data class HospitalAppointment(val id: Int, val hospital: String, val date: String, val time: String, val memo: String, val status: String = "예정")
 
@@ -167,6 +221,22 @@ fun EasyHealthApp(context: Context) {
             if (isEmpty()) add("본인")
         }
     }
+    val personProfiles = remember {
+        mutableStateMapOf<String, PersonProfile>().apply {
+            try {
+                val saved = JSONArray(prefs.getString("person_profiles", "[]") ?: "[]")
+                for (i in 0 until saved.length()) {
+                    val o = saved.getJSONObject(i)
+                    val name = o.optString("name")
+                    if (name.isNotBlank()) put(name, PersonProfile(name, o.optString("sex"),
+                        if (o.isNull("age")) null else o.optInt("age"),
+                        if (o.isNull("heightCm")) null else o.optDouble("heightCm")))
+                }
+            } catch (_: Exception) { }
+            people.forEach { if (!containsKey(it)) put(it, PersonProfile(it)) }
+        }
+    }
+    fun saveProfiles() { prefs.edit().putString("person_profiles", encodePeopleProfiles(personProfiles)).apply() }
     var selectedPerson by remember { mutableStateOf(prefs.getString("selected_person", "본인") ?: "본인") }
     if (selectedPerson !in people) selectedPerson = people.first()
     val enabledDevices = remember {
@@ -199,7 +269,8 @@ fun EasyHealthApp(context: Context) {
     var showRegisterDeviceDialog by remember { mutableStateOf(false) }
     val registerSelections = remember { mutableStateListOf<String>() }
     var deviceDeleteTarget by remember { mutableStateOf<String?>(null) }
-    var newPerson by remember { mutableStateOf("") }
+    var personEditing by remember { mutableStateOf<PersonProfile?>(null) }
+    var personDeleteTarget by remember { mutableStateOf<String?>(null) }
     var showDeviceInfo by remember { mutableStateOf(false) }
     var showBluetoothSearch by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
