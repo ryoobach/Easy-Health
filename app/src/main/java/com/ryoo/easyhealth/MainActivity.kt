@@ -629,7 +629,7 @@ fun EasyHealthApp(context: Context) {
                     } else {
                         val selectedRows = periodRecords.filter { it.type == selectedReportVital }.sortedByDescending { it.timestamp }
                         val numericValues = selectedRows.mapNotNull { it.value.toDoubleOrNull() }
-                        val chartRows = selectedRows.asReversed().takeLast(30)
+                        val chartRows = selectedRows.take(30).asReversed()
                         val chartValues = chartRows.mapNotNull { row ->
                             val n = if (selectedReportVital == "혈압") row.value.substringBefore("/").toDoubleOrNull() else row.value.toDoubleOrNull()
                             n?.let { row to it }
@@ -698,21 +698,31 @@ fun EasyHealthApp(context: Context) {
                                         Text("참고선: 70 미만 저혈당 주의 · 180은 식후 1~2시간 혈당 목표 참고선", color = Color.Gray, fontSize = 10.sp)
                                         Text("공복 혈당 목표는 일반적으로 80~130 mg/dL이며, 개인별 목표와 측정 시점에 따라 해석이 달라집니다.", color = Color.Gray, fontSize = 10.sp)
                                     } else {
-                                        Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+                                        Text("Y축 · 측정값 (" + (units[selectedReportVital]?.ifBlank { "단위 없음" } ?: "측정값") + ")", color = Color.Gray, fontSize = 10.sp)
+                                        Canvas(Modifier.fillMaxWidth().height(150.dp)) {
                                             val vals = chartValues.map { it.second }
-                                            val minV = (vals.minOrNull() ?: 0.0)
-                                            val maxV = (vals.maxOrNull() ?: 1.0)
-                                            val span = (maxV - minV).takeIf { it > 0.0 } ?: 1.0
-                                            val pts = chartValues.mapIndexed { index, pair ->
-                                                Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1), size.height - ((pair.second - minV) / span * (size.height - 18.dp.toPx())).toFloat() - 9.dp.toPx())
+                                            val rawMin = vals.minOrNull() ?: 0.0
+                                            val rawMax = vals.maxOrNull() ?: 1.0
+                                            val spread = (rawMax - rawMin).takeIf { it > 0.0 } ?: (kotlin.math.abs(rawMax) * 0.2).coerceAtLeast(1.0)
+                                            val minV = rawMin - spread * 0.1
+                                            val maxV = rawMax + spread * 0.1
+                                            val left = 34.dp.toPx()
+                                            val right = size.width - 6.dp.toPx()
+                                            val top = 8.dp.toPx()
+                                            val bottom = size.height - 24.dp.toPx()
+                                            fun xFor(index: Int) = if (chartValues.size == 1) (left + right) / 2f else left + index * (right - left) / (chartValues.size - 1)
+                                            fun yFor(value: Double) = bottom - ((value - minV) / (maxV - minV) * (bottom - top)).toFloat()
+                                            drawLine(Color.DarkGray, Offset(left, top), Offset(left, bottom), strokeWidth = 1.5.dp.toPx())
+                                            drawLine(Color.DarkGray, Offset(left, bottom), Offset(right, bottom), strokeWidth = 1.5.dp.toPx())
+                                            val ticks = (0..4).map { minV + (maxV - minV) * it / 4.0 }
+                                            ticks.forEach { tick ->
+                                                val y = yFor(tick)
+                                                drawLine(Color.LightGray.copy(alpha = 0.7f), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                                                drawContext.canvas.nativeCanvas.drawText(String.format(Locale.KOREA, "%.1f", tick), 0f, y + 4.dp.toPx(), android.graphics.Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 9.dp.toPx() })
                                             }
-                                            for (i in 0 until pts.lastIndex) {
-                                                val c = riskFor(selectedReportVital, chartValues[i + 1].first.value, selectedProfile).color
-                                                drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
-                                            }
-                                            pts.forEachIndexed { index, point ->
-                                                drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point)
-                                            }
+                                            val pts = chartValues.mapIndexed { index, pair -> Offset(xFor(index), yFor(pair.second)) }
+                                            for (i in 0 until pts.lastIndex) drawLine(Color.Gray.copy(alpha = 0.65f), pts[i], pts[i + 1], strokeWidth = 1.5.dp.toPx())
+                                            pts.forEachIndexed { index, point -> drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point) }
                                         }
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
