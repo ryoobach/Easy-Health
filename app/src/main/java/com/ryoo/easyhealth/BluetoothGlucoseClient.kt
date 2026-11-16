@@ -274,7 +274,7 @@ class BluetoothGlucoseClient(private val context: Context) {
         g.getService(GLUCOSE_SERVICE)?.getCharacteristic(CONTEXT) != null
 
     private fun parseMeasurement(b: ByteArray): MeterReading? {
-        if (b.size < 14) return null
+        if (b.size < 12) return null
         return try {
             var p = 0
             val flags = b[p++].toInt() and 0xff
