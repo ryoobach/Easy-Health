@@ -758,7 +758,12 @@ fun EasyHealthApp(context: Context) {
                                         Text("그래프로 표시할 숫자 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
-                                        val graphCanvasWidth = when (reportPeriod) { "전체" -> maxOf(360.dp, (graphRows.size * 3).dp); "3개월" -> maxOf(360.dp, (graphRows.size * 8).dp); else -> 360.dp }
+                                        val graphCanvasWidth = when (reportPeriod) {
+                                            "전체" -> maxOf(360.dp, (graphRows.size * 3).dp)
+                                            "3개월" -> maxOf(540.dp, (graphRows.size * 8).dp)
+                                            "1개월" -> maxOf(420.dp, (graphRows.size * 8).dp)
+                                            else -> 360.dp
+                                        }
                                         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                                         Canvas(Modifier.width(graphCanvasWidth).height(170.dp)) {
                                             val values = graphRows.map { it.second }
@@ -771,7 +776,13 @@ fun EasyHealthApp(context: Context) {
                                             val right = size.width - 8.dp.toPx()
                                             val top = 8.dp.toPx()
                                             val bottom = size.height - 27.dp.toPx()
-                                            fun xFor(index: Int) = if (graphRows.size == 1) (left + right) / 2f else left + index * (right - left) / (graphRows.size - 1)
+                                            val graphStart = if (reportPeriod == "전체") graphRows.first().first.timestamp else reportStart
+                                            val graphEnd = now.coerceAtLeast(graphStart + 1L)
+                                            fun xFor(index: Int): Float {
+                                                val timestamp = graphRows[index].first.timestamp
+                                                val fraction = ((timestamp - graphStart).toDouble() / (graphEnd - graphStart).toDouble()).toFloat().coerceIn(0f, 1f)
+                                                return left + fraction * (right - left)
+                                            }
                                             fun yFor(value: Double) = bottom - ((value - minV) / (maxV - minV) * (bottom - top)).toFloat()
                                                                                         normalRangeForGraph(vital)?.let { range ->
                                                 val upper = yFor(range.second.coerceIn(minV, maxV))
