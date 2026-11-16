@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.*
@@ -344,6 +345,7 @@ fun EasyHealthApp(context: Context) {
         } catch (_: Exception) { android.widget.Toast.makeText(context, "올바른 Easy Health JSON 파일이 아닙니다.", android.widget.Toast.LENGTH_LONG).show() }
     }
     var showAppInfo by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
@@ -398,6 +400,9 @@ fun EasyHealthApp(context: Context) {
                         IconButton(onClick = { personEditing = PersonProfile("") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green, modifier = Modifier.size(18.dp)) }
                         IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Home, contentDescription = "홈", tint = Green, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(onClick = { showHelpDialog = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Help, contentDescription = "도움말", tint = Green, modifier = Modifier.size(18.dp))
                         }
                         IconButton(onClick = { showAppInfo = true }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Info, contentDescription = "앱정보", tint = Green, modifier = Modifier.size(18.dp))
@@ -831,26 +836,39 @@ fun EasyHealthApp(context: Context) {
 
     if (showAppInfo) {
         Dialog(onDismissRequest = { showAppInfo = false }) {
-            Surface(
-                modifier = Modifier.clickable { showAppInfo = false },
-                shape = RoundedCornerShape(22.dp),
-                color = Color.White
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 26.dp, vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 아이콘", modifier = Modifier.size(52.dp))
-                    Text("Easy Health ${BuildConfig.VERSION_NAME}", color = Ink, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-                    Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp)
-                    Text("AI 개발 협력: ChatGPT (OpenAI)", color = Color.Gray, fontSize = 11.sp)
-                    Text("화면을 터치하면 닫힙니다.", color = Color.Gray, fontSize = 10.sp)
+            Surface(shape = RoundedCornerShape(22.dp), color = Color.White) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 26.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(76.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("Easy Health", color = Ink, fontWeight = FontWeight.Bold, fontSize = 25.sp)
+                        Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp)
+                    }
                 }
             }
         }
     }
-
+    if (showHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            title = { Text("Easy Health 사용 도움말", color = Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("1. 사용자 정보와 측정 대상자", fontWeight = FontWeight.Bold, color = Ink)
+                    Text("처음 실행할 때 이름, 성별, 나이, 키를 입력합니다. 가족 등 다른 사람의 기록은 상단의 대상자 이름을 눌러 추가하거나 전환할 수 있습니다.")
+                    Text("2. 건강 기록 입력", fontWeight = FontWeight.Bold, color = Ink)
+                    Text("기록 화면에서 혈당, 혈압, 체온, 체중과 기타 건강 정보를 입력하고 저장할 수 있습니다. 저장한 기록은 수정하거나 삭제할 수 있습니다.")
+                    Text("3. 블루투스 측정기기", fontWeight = FontWeight.Bold, color = Ink)
+                    Text("기기 설정에서 측정기기를 등록하고 연결 상태를 확인합니다. 블루투스 자동 가져오기를 누른 뒤 기기를 선택하면 측정값을 가져올 수 있습니다. 기기별 연결 방법도 확인할 수 있습니다.")
+                    Text("4. 건강 리포트", fontWeight = FontWeight.Bold, color = Ink)
+                    Text("리포트 화면에서 주간, 월간, 분기별 또는 전체 기간의 기록을 확인할 수 있습니다. 필요한 건강 항목을 선택해 평균, 최고·최저값과 측정 추이를 살펴보세요.")
+                    Text("5. 병원 일정", fontWeight = FontWeight.Bold, color = Ink)
+                    Text("병원 일정에서 방문 날짜와 시간을 등록하고 메모를 남길 수 있습니다.")
+                    Text("참고: 화면의 색상과 기준은 일반적인 참고 정보이며 의료진의 진단을 대신하지 않습니다. 측정 조건과 개인별 목표에 따라 해석이 달라질 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showHelpDialog = false }) { Text("닫기") } }
+        )
+    }
     if (showAppointmentDialog) {
         AppointmentDialog(existing = editingAppointment, onDismiss = { showAppointmentDialog = false },
             onSave = { hospital, date, time, memo, status ->
