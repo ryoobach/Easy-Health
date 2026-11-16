@@ -417,7 +417,7 @@ fun EasyHealthApp(context: Context) {
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
-    var reportPeriod by remember { mutableStateOf((prefs.getString("last_report_period", "월간") ?: "월간").let { if (it == "분기별") "3개월" else it }) }
+    var reportPeriod by remember { mutableStateOf((prefs.getString("last_report_period", "1개월") ?: "1개월").let { when (it) { "월간" -> "1개월"; "분기별" -> "3개월"; else -> it } }) }
     var selectedReportVital by remember { mutableStateOf(prefs.getString("last_report_vital", "혈당") ?: "혈당") }
     var deviceHelpTarget by remember { mutableStateOf<String?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
@@ -428,7 +428,7 @@ fun EasyHealthApp(context: Context) {
     val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
     if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
-    val days = when (reportPeriod) { "월간" -> 30; "3개월" -> 90; "전체" -> 0; else -> 7 }
+    val days = when (reportPeriod) { "1개월" -> 30; "3개월" -> 90; "전체" -> 0; else -> 7 }
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp >= now - days * 86400000L }
     val glucoseValues = periodRecords.filter { it.type == "혈당" }.mapNotNull { it.value.toDoubleOrNull() }
     val averageGlucose = glucoseValues.takeIf { it.isNotEmpty() }?.average()
@@ -616,11 +616,13 @@ fun EasyHealthApp(context: Context) {
                                     }
                                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(0.dp)) {
                                         val risk = riskFor(record.type, record.value, selectedProfile)
-                                        if (record.type == "혈당") mealPeriodFor(record.timestamp, selectedProfile)?.let { period ->
-                                            Text(period.label, color = period.color, fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 9.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            if (record.type == "혈당") mealPeriodFor(record.timestamp, selectedProfile)?.let { period ->
+                                                Text(period.label, color = period.color, fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 11.sp)
+                                            }
+                                            Text(record.value + (units[record.type]?.let { if (it.isNotBlank()) " $it" else "" } ?: ""),
+                                                color = risk.color, fontSize = 18.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
                                         }
-                                        Text(record.value + (units[record.type]?.let { if (it.isNotBlank()) " $it" else "" } ?: ""),
-                                            color = risk.color, fontSize = 18.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp)
                                         Text(risk.label, color = risk.color, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, lineHeight = 10.sp)
                                     }
                                 }
@@ -685,7 +687,7 @@ fun EasyHealthApp(context: Context) {
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
-                    ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
+                    ScrollableTabRow(selectedTabIndex = listOf("주간", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
                         listOf("주간", "월간", "3개월", "전체").forEach { label ->
                             Tab(selected = reportPeriod == label, onClick = {
                                 reportPeriod = label
@@ -695,7 +697,7 @@ fun EasyHealthApp(context: Context) {
                     }
                     Text(when (reportPeriod) { "전체" -> "전체 기록 기준"; "3개월" -> "최근 3개월 기준"; else -> "최근 ${days}일 기준" }, color = Color.Gray, fontSize = 12.sp)
                     if (reportVitalTypes.isEmpty()) {
-                        Text("기기 설정에서 리포트에 포함할 기기를 체크해 주세요.", color = Color.Gray)
+                        Text("등록된 기기의 측정 기록이 쌓이면 여기에 표시됩니다.", color = Color.Gray)
                     } else {
                         // 바이탈별로 그래프와 요약만 표시합니다. 상세 측정 목록은 첫 화면과 중복되므로 제외합니다.
                         reportVitalTypes.forEach { vital ->
@@ -711,7 +713,7 @@ fun EasyHealthApp(context: Context) {
                                         Text("그래프로 표시할 숫자 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
-                                        val graphCanvasWidth = if (reportPeriod == "전체" || reportPeriod == "3개월") maxOf(320.dp, (graphRows.size * 24).dp) else 360.dp
+                                        val graphCanvasWidth = when (reportPeriod) { "전체" -> maxOf(360.dp, (graphRows.size * 3).dp); "3개월" -> maxOf(360.dp, (graphRows.size * 8).dp); else -> 360.dp }
                                         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                                         Canvas(Modifier.width(graphCanvasWidth).height(170.dp)) {
                                             val values = graphRows.map { it.second }
@@ -822,8 +824,7 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                     }
-                    Text("활성화된 모든 바이탈을 그래프와 요약으로 표시합니다. 같은 항목을 측정하는 기기는 통합해 분석합니다.", color = Color.Gray, fontSize = 11.sp)
-                    OutlinedButton(onClick = { tab = "기기 설정" }, modifier = Modifier.fillMaxWidth()) { Text("리포트에 포함할 기기 설정") }
+                    
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
