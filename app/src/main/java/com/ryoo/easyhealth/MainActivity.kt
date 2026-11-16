@@ -127,9 +127,10 @@ private fun mealPeriodFor(timestamp: Long, profile: PersonProfile): MealPeriod? 
     if (bed != null && inWindow(before(bed, 60), bed))
         return MealPeriod("취침전", Color(0xFF8E44AD))
     val meals = listOf(
-        Triple("아침", breakfast, Pair(Color(0xFF1565C0), Color(0xFF2E7D32))),
-        Triple("점심", lunch, Pair(Color(0xFF00897B), Color(0xFF7CB342))),
-        Triple("저녁", dinner, Pair(Color(0xFFEF6C00), Color(0xFFD84315)))
+        // 식사별로 같은 색상 계열을 사용하되 식전은 진하게, 식후는 밝게 표시
+        Triple("아침", breakfast, Pair(Color(0xFF0D47A1), Color(0xFF90CAF9))),
+        Triple("점심", lunch, Pair(Color(0xFF00695C), Color(0xFF80CBC4))),
+        Triple("저녁", dinner, Pair(Color(0xFFE65100), Color(0xFFFFCC80)))
     )
     meals.forEach { (name, time, colors) ->
         if (time != null && inWindow(before(time, 30), time))
