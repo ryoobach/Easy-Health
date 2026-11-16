@@ -106,6 +106,7 @@ private fun riskFor(type: String, value: String, profile: PersonProfile? = null)
     val blue = Color(0xFF3976B8)
     val v = value.trim().toDoubleOrNull()
     return when (type) {
+        "당화혈색소 추정치" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 5.7 -> RiskInfo("참고 범위", green); v < 6.5 -> RiskInfo("주의 범위", yellow); else -> RiskInfo("높음", red) }
         "혈당" -> when { v == null -> RiskInfo("판정 불가", Color.Gray); v < 70 -> RiskInfo("저혈당 주의", red); v <= 180 -> RiskInfo("목표 참고 범위", green); v <= 250 -> RiskInfo("높음", yellow); else -> RiskInfo("매우 높음", red) }
         "혈압" -> {
             val p = value.split("/").mapNotNull { it.toDoubleOrNull() }
@@ -437,7 +438,8 @@ fun EasyHealthApp(context: Context) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text("당화혈색소 추정치", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                            Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = Green, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                            Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                                            homeEstimatedA1c?.let { Text(riskFor("당화혈색소 추정치", it.toString(), selectedProfile).label, color = riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color, fontSize = 10.sp) }
                                             Text("평균 혈당 기반 추정", color = Color.Gray, fontSize = 10.sp)
                                         }
                                     }
@@ -593,6 +595,7 @@ fun EasyHealthApp(context: Context) {
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
+                    Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -636,11 +639,11 @@ fun EasyHealthApp(context: Context) {
                                             Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1), size.height - ((pair.second - minV) / span * (size.height - 18.dp.toPx())).toFloat() - 9.dp.toPx())
                                         }
                                         for (i in 0 until pts.lastIndex) {
-                                            val c = riskFor(selectedReportVital, chartValues[i + 1].second.toString(), selectedProfile).color
+                                            val c = riskFor(selectedReportVital, chartValues[i + 1].first.value, selectedProfile).color
                                             drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
                                         }
                                         pts.forEachIndexed { index, point ->
-                                            drawCircle(riskFor(selectedReportVital, chartValues[index].second.toString(), selectedProfile).color, radius = 5.dp.toPx(), center = point)
+                                            drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point)
                                         }
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -922,8 +925,8 @@ fun EasyHealthApp(context: Context) {
                                         Text(person, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(listOf(profile.sex, profile.age?.let { "${it}세" }, profile.heightCm?.let { "${it}cm" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "추가 정보 없음" }, color = Color.Gray, fontSize = 11.sp)
                                     }
-                                    TextButton(onClick = { personEditing = profile }) { Text("수정") }
-                                    TextButton(onClick = { personDeleteTarget = person }, enabled = people.size > 1) { Text("삭제", color = Color.Red) }
+                                    TextButton(onClick = { personEditing = profile; showPeopleDialog = false }) { Text("수정") }
+                                    TextButton(onClick = { personDeleteTarget = person; showPeopleDialog = false }, enabled = people.size > 1) { Text("삭제", color = Color.Red) }
                                 }
                             }
                         }
@@ -1000,6 +1003,45 @@ fun EasyHealthApp(context: Context) {
             },
             confirmButton = { TextButton(onClick = { showDeviceInfo = false }) { Text("닫기") } })
     }
+}
+
+
+@Composable
+private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, onSave: (PersonProfile) -> Unit) {
+    var name by remember(existing) { mutableStateOf(existing.name) }
+    var sex by remember(existing) { mutableStateOf(existing.sex) }
+    var age by remember(existing) { mutableStateOf(existing.age?.toString() ?: "") }
+    var height by remember(existing) { mutableStateOf(existing.heightCm?.toString() ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (existing.name.isBlank()) "측정 대상자 추가" else "측정 대상자 정보 수정") },
+        text = {
+            Column(Modifier.heightIn(max = 430.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("이름") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("성별", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("남성", "여성", "선택 안 함").forEach { option ->
+                        FilterChip(selected = sex == option, onClick = { sex = if (option == "선택 안 함") "" else option }, label = { Text(option, fontSize = 12.sp) })
+                    }
+                }
+                OutlinedTextField(value = age, onValueChange = { age = it.filter(Char::isDigit).take(3) }, label = { Text("나이 (세)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = height, onValueChange = { height = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("키 (cm)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("키를 입력하면 체중 기록에서 BMI를 계산해 위험 참고 색상에 반영합니다. 성별과 나이는 개인별 리포트 해석에 활용합니다.", color = Color.Gray, fontSize = 11.sp)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val a = age.toIntOrNull()
+                val h = height.toDoubleOrNull()
+                if (name.trim().isNotBlank() && (age.isBlank() || a in 0..120) && (height.isBlank() || (h != null && h in 30.0..250.0))) {
+                    onSave(PersonProfile(name.trim(), sex, a, h))
+                }
+            }) { Text("저장") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+    )
 }
 
 @Composable
