@@ -433,7 +433,7 @@ fun EasyHealthApp(context: Context) {
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
                                 if (activeTypes.contains("혈당")) {
-                                    Card(Modifier.width(148.dp), colors = CardDefaults.cardCardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
+                                    Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                                         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
