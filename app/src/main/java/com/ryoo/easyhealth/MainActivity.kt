@@ -627,7 +627,7 @@ fun EasyHealthApp(context: Context) {
                     if (reportVitalTypes.isEmpty()) {
                         Text("기기 설정에서 리포트에 포함할 기기를 체크해 주세요.", color = Color.Gray)
                     } else {
-                        // 등록된 모든 바이탈 항목을 각각 독립된 그래프로 표시합니다.
+                        // 바이탈별로 그래프와 요약만 표시합니다. 상세 측정 목록은 첫 화면과 중복되므로 제외합니다.
                         reportVitalTypes.forEach { vital ->
                             val vitalRows = periodRecords.filter { it.type == vital }.sortedBy { it.timestamp }
                             val graphRows = vitalRows.mapNotNull { row ->
@@ -638,13 +638,7 @@ fun EasyHealthApp(context: Context) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(vital + " 측정 추이 · 총 " + vitalRows.size + "회", color = Ink, fontWeight = FontWeight.SemiBold)
                                     if (graphRows.isEmpty()) {
-                                        Text("숫자로 표시할 측정값이 없어 날짜별 기록으로 표시합니다.", color = Color.Gray, fontSize = 12.sp)
-                                        vitalRows.asReversed().forEach { row ->
-                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                Text(SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(Date(row.timestamp)), color = Color.Gray, fontSize = 11.sp)
-                                                Text(row.value, color = Ink, fontSize = 11.sp)
-                                            }
-                                        }
+                                        Text("그래프로 표시할 숫자 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
                                         Canvas(Modifier.fillMaxWidth().height(170.dp)) {
@@ -670,62 +664,39 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             val points = graphRows.mapIndexed { index, pair -> Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV))) }
                                             for (i in 0 until points.lastIndex) drawLine(Color.Gray.copy(alpha = 0.65f), points[i], points[i + 1], strokeWidth = 1.5.dp.toPx())
-                                            points.forEachIndexed { index, point ->
-                                                drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = 4.5.dp.toPx(), center = point)
-                                            }
+                                            points.forEachIndexed { index, point -> drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = 4.5.dp.toPx(), center = point) }
                                             val datePaint = android.graphics.Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 9.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER }
-                                            val dateIndices = listOf(0, graphRows.size / 2, graphRows.lastIndex).distinct()
-                                            dateIndices.forEach { index ->
+                                            listOf(0, graphRows.size / 2, graphRows.lastIndex).distinct().forEach { index ->
                                                 val date = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(graphRows[index].first.timestamp))
                                                 drawContext.canvas.nativeCanvas.drawText(date, xFor(index), size.height - 5.dp.toPx(), datePaint)
-                                            }
-                                        }
-                                        // 그래프의 각 점에 대응하는 날짜와 원래 측정값을 빠짐없이 표시합니다.
-                                        Text("날짜 · 측정값", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                                        vitalRows.asReversed().forEach { row ->
-                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                Text(SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(Date(row.timestamp)), color = Color.Gray, fontSize = 11.sp)
-                                                Text(row.value + (units[vital]?.takeIf { it.isNotBlank() }?.let { " $it" } ?: ""), color = riskFor(vital, row.value, selectedProfile).color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        val selectedRows = periodRecords.filter { it.type == selectedReportVital }.sortedByDescending { it.timestamp }
-                        val numericValues = selectedRows.mapNotNull { it.value.toDoubleOrNull() }
-                        Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text("${selectedReportVital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                                if (selectedRows.isEmpty()) Text("선택한 기간에 기록이 없습니다.", color = Color.Gray)
-                                else if (selectedReportVital == "혈압") {
-                                    val bp = selectedRows.mapNotNull { row ->
-                                        val parts = row.value.split("/")
-                                        if (parts.size >= 3) parts.take(3).mapNotNull { it.toDoubleOrNull() }.takeIf { it.size == 3 } else null
-                                    }
-                                    if (bp.isNotEmpty()) {
-                                        Text("평균 ${bp.map { it[0] }.average().toInt()}/${bp.map { it[1] }.average().toInt()} mmHg", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
-                                        Text("평균 맥박 ${bp.map { it[2] }.average().toInt()}회/분 · 총 ${selectedRows.size}회", color = Ink, fontSize = 12.sp)
-                                    } else Text("총 ${selectedRows.size}회 측정", color = Green, fontWeight = FontWeight.Bold)
-                                } else if (numericValues.isNotEmpty()) {
-                                    Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[selectedReportVital] ?: ""}", color = riskFor(selectedReportVital, numericValues.average().toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
-                                    Text("평균 기준: ${riskFor(selectedReportVital, numericValues.average().toString(), selectedProfile).label}", color = riskFor(selectedReportVital, numericValues.average().toString(), selectedProfile).color, fontSize = 11.sp)
-                                    Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${selectedRows.size}회", color = Ink, fontSize = 12.sp)
-                                } else Text("총 ${selectedRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
-                                selectedRows.firstOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
-                            }
-                        }
-                        if (selectedRows.isNotEmpty()) {
-                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    Text("측정 기록", color = Ink, fontWeight = FontWeight.SemiBold)
-                                    selectedRows.take(100).forEach { row ->
-                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text(dateFormat.format(Date(row.timestamp)), color = Color.Gray, fontSize = 10.sp, modifier = Modifier.weight(1.4f))
-                                            Text(row.value + (units[selectedReportVital]?.let { if (it.isBlank()) "" else " $it" } ?: "") + " · " + riskFor(selectedReportVital, row.value, selectedProfile).label,
-                                                color = riskFor(selectedReportVital, row.value, selectedProfile).color, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            val numericValues = vitalRows.mapNotNull { it.value.toDoubleOrNull() }
+                            Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text("${vital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                    if (vitalRows.isEmpty()) {
+                                        Text("선택한 기간에 기록이 없습니다.", color = Color.Gray)
+                                    } else if (vital == "혈압") {
+                                        val bp = vitalRows.mapNotNull { row ->
+                                            val parts = row.value.split("/")
+                                            if (parts.size >= 3) parts.take(3).mapNotNull { it.toDoubleOrNull() }.takeIf { it.size == 3 } else null
                                         }
+                                        if (bp.isNotEmpty()) {
+                                            Text("평균 ${bp.map { it[0] }.average().toInt()}/${bp.map { it[1] }.average().toInt()} mmHg", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                            Text("평균 맥박 ${bp.map { it[2] }.average().toInt()}회/분 · 총 ${vitalRows.size}회", color = Ink, fontSize = 12.sp)
+                                        } else Text("총 ${vitalRows.size}회 측정", color = Green, fontWeight = FontWeight.Bold)
+                                    } else if (numericValues.isNotEmpty()) {
+                                        Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[vital] ?: ""}", color = riskFor(vital, numericValues.average().toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                        Text("평균 기준: ${riskFor(vital, numericValues.average().toString(), selectedProfile).label}", color = riskFor(vital, numericValues.average().toString(), selectedProfile).color, fontSize = 11.sp)
+                                        Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${vitalRows.size}회", color = Ink, fontSize = 12.sp)
+                                    } else {
+                                        Text("총 ${vitalRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                     }
+                                    vitalRows.lastOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
                                 }
                             }
                         }
