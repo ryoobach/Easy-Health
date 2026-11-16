@@ -171,7 +171,7 @@ class BluetoothGlucoseClient(private val context: Context) {
                 return
             }
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                handler.post { activeDevice?.let { listener?.onConnected(it); listener?.onStatus("연결됨. 측정 기록 서비스를 확인하고 있습니다.") } }
+                handler.post { listener?.onStatus("연결됨. 측정 기록 서비스를 확인하고 있습니다.") }
                 g.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 handler.post { listener?.onStatus("측정기 연결이 종료되었습니다.") }
@@ -191,6 +191,7 @@ class BluetoothGlucoseClient(private val context: Context) {
                 handler.post { listener?.onError("이 기기는 표준 혈당 기록 서비스(1808)를 제공하지 않습니다. 기기별 연결 방식을 추가로 확인해야 합니다.") }
                 return
             }
+            handler.post { activeDevice?.let { listener?.onConnected(it) } }
             enableNotifications(g, measurement)
             service.getCharacteristic(CONTEXT)?.let { enableNotifications(g, it) }
             enableNotifications(g, racp)
