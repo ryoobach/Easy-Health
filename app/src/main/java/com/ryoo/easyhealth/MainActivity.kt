@@ -344,8 +344,20 @@ fun EasyHealthApp(context: Context) {
                             Button(onClick = { editing = null; showRecordDialog = true }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("측정 기록 추가")
                             }
-                            OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("블루투스 자동 가져오기")
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.weight(1f)) {
+                                    Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(4.dp)); Text("블루투스 자동 가져오기", fontSize = 10.sp)
+                                }
+                                OutlinedButton(onClick = {
+                                    val csv = buildString {
+                                        appendLine("대상자,항목,측정값,측정일시,측정기기,메모")
+                                        records.sortedBy { it.timestamp }.forEach { r ->
+                                            appendLine(listOf(r.person, r.type, r.value, dateFormat.format(Date(r.timestamp)), r.source, r.note).joinToString(","))
+                                        }
+                                    }
+                                    val send = Intent(Intent.ACTION_SEND).apply { type = "text/csv"; putExtra(Intent.EXTRA_SUBJECT, "Easy Health 건강 기록"); putExtra(Intent.EXTRA_TEXT, csv) }
+                                    context.startActivity(Intent.createChooser(send, "건강 기록 내보내기"))
+                                }, modifier = Modifier.weight(1f)) { Text("데이터 내보내기", fontSize = 10.sp) }
                             }
                         }
                     }
