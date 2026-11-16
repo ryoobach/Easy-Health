@@ -535,32 +535,86 @@ fun EasyHealthApp(context: Context) {
                     }
                     OutlinedButton(onClick = { tab = "기기 설정" }, modifier = Modifier.fillMaxWidth()) { Text("리포트에 포함할 기기 설정") }
                 }
-                else -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("리포트 기기 선택", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("체크한 기기에서 측정하는 항목만 리포트에 표시됩니다. 같은 항목을 측정하는 기기는 통합해서 분석합니다.", color = Color.Gray, fontSize = 13.sp)
-                    devices.forEach { device ->
-                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
-                            Row(Modifier.fillMaxWidth().clickable {
-                                if (enabledDevices.contains(device.first)) enabledDevices.remove(device.first) else enabledDevices.add(device.first)
-                                prefs.edit().putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
-                            }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = enabledDevices.contains(device.first), onCheckedChange = { checked ->
-                                    if (checked && !enabledDevices.contains(device.first)) enabledDevices.add(device.first)
-                                    if (!checked) enabledDevices.remove(device.first)
+                else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
+                    Text("등록한 기기 중 리포트에 포함할 기기만 체크해 주세요. 같은 항목을 측정하는 기기는 통합해서 분석합니다.", color = Color.Gray, fontSize = 13.sp)
+                    Button(onClick = { registerSelections.clear(); registerSelections.addAll(devices.map { it.first }.filter { it !in registeredDevices }); showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 등록")
+                    }
+                    if (registeredDevices.isEmpty()) {
+                        Text("등록된 기기가 없습니다. 기기 등록 버튼을 눌러 추가해 주세요.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))
+                    } else {
+                        devices.filter { it.first in registeredDevices }.forEach { device ->
+                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.combinedClickable(onClick = {
+                                    if (enabledDevices.contains(device.first)) enabledDevices.remove(device.first) else enabledDevices.add(device.first)
                                     prefs.edit().putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
-                                })
-                                Column {
-                                    Text(device.first, color = Ink, fontWeight = FontWeight.SemiBold)
-                                    Text(device.second.joinToString(" · "), color = Color.Gray, fontSize = 12.sp)
+                                }, onLongClick = { deviceDeleteTarget = device.first })) {
+                                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(checked = enabledDevices.contains(device.first), onCheckedChange = { checked ->
+                                        if (checked && !enabledDevices.contains(device.first)) enabledDevices.add(device.first)
+                                        if (!checked) enabledDevices.remove(device.first)
+                                        prefs.edit().putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
+                                    })
+                                    Column {
+                                        Text(device.first, color = Ink, fontWeight = FontWeight.SemiBold)
+                                        Text(device.second.joinToString(" · "), color = Color.Gray, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }
+                        Text("짧게 누르면 리포트 포함 여부를 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
-                    Text("현재는 리포트 표시 설정입니다. 실제 블루투스 연결과 자동 수집은 기기별 호환성 확인 후 추가됩니다.", color = Color.Gray, fontSize = 12.sp)
+                    Text("실제 블루투스 연결과 자동 수집은 기기별 호환성 확인 후 지원됩니다.", color = Color.Gray, fontSize = 12.sp)
                     Button(onClick = { tab = "리포트" }, modifier = Modifier.fillMaxWidth()) { Text("설정 완료") }
                 }
             }
         }
+    }
+
+
+    if (showRegisterDeviceDialog) {
+        AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 등록") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    devices.filter { it.first !in registeredDevices }.forEach { device ->
+                        Row(Modifier.fillMaxWidth().clickable {
+                            if (device.first in registerSelections) registerSelections.remove(device.first) else registerSelections.add(device.first)
+                        }, verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = device.first in registerSelections, onCheckedChange = { checked ->
+                                if (checked && device.first !in registerSelections) registerSelections.add(device.first)
+                                if (!checked) registerSelections.remove(device.first)
+                            })
+                            Column {
+                                Text(device.first, color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(device.second.joinToString(" · "), color = Color.Gray, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = {
+                registerSelections.forEach { name ->
+                    if (name !in registeredDevices) registeredDevices.add(name)
+                    if (name !in enabledDevices) enabledDevices.add(name)
+                }
+                prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
+                    .putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
+                showRegisterDeviceDialog = false
+            }) { Text("등록") } },
+            dismissButton = { TextButton(onClick = { showRegisterDeviceDialog = false }) { Text("취소") } })
+    }
+    deviceDeleteTarget?.let { target ->
+        AlertDialog(onDismissRequest = { deviceDeleteTarget = null },
+            title = { Text("기기 삭제") },
+            text = { Text(target + " 기기를 삭제하시겠습니까?") },
+            confirmButton = { TextButton(onClick = {
+                registeredDevices.remove(target); enabledDevices.remove(target)
+                prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
+                    .putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
+                deviceDeleteTarget = null
+            }) { Text("삭제", color = Color.Red) } },
+            dismissButton = { TextButton(onClick = { deviceDeleteTarget = null }) { Text("취소") } })
     }
 
     if (showOwnerSetup) {
