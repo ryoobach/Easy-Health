@@ -124,25 +124,54 @@ private fun mealPeriodFor(timestamp: Long, profile: PersonProfile): MealPeriod? 
     val lunch = parse(profile.lunchTime)
     val dinner = parse(profile.dinnerTime)
     val bed = parse(profile.bedtime)
-    if (bed != null && inWindow(before(bed, 60), bed))
-        return MealPeriod("취침전", Color(0xFF8E44AD))
     val meals = listOf(
-        // 식사별로 같은 색상 계열을 사용하되 식전은 밝게, 식후는 진하게 표시
         Triple("아침", breakfast, Pair(Color(0xFF90CAF9), Color(0xFF0D47A1))),
         Triple("점심", lunch, Pair(Color(0xFF80CBC4), Color(0xFF00695C))),
         Triple("저녁", dinner, Pair(Color(0xFFFFCC80), Color(0xFFE65100)))
-    )
+    ).filter { it.second != null }
     meals.forEach { (name, time, colors) ->
         if (time != null && inWindow(before(time, 30), time))
             return MealPeriod("${name}식전", colors.first)
     }
-    meals.forEach { (name, time, colors) ->
-        if (time != null && inWindow(time, after(time, 120)))
-            return MealPeriod("${name}식후", colors.second)
-    }
     if (wake != null && breakfast != null && inWindow(wake, before(breakfast, 30)))
         return MealPeriod("공복", Color(0xFF3949AB))
+    // 식후 표시는 2시간으로 끊지 않고 다음 식사 예정 시각까지 유지합니다.
+    if (meals.isNotEmpty()) {
+        val ordered = meals.map { it.first to it.second!! }.sortedBy { it.second }
+        val previous = ordered.lastOrNull { it.second <= minute } ?: ordered.last()
+        return MealPeriod("${previous.first}식후", meals.first { it.first == previous.first }.third.second)
+    }
+    if (bed != null && inWindow(before(bed, 60), bed))
+        return MealPeriod("취침전", Color(0xFF8E44AD))
     return null
+}
+
+private data class GlucoseMeasurementGroup(val source: String, val timestamp: Long, val average: Double, val values: List<Double>)
+
+// 같은 기기에서 60초 이내 연속 측정한 혈당은 하나의 측정 묶음으로 계산합니다.
+private fun glucoseMeasurementGroups(records: List<VitalRecord>, maxGapMillis: Long = 60_000L): List<GlucoseMeasurementGroup> {
+    val sorted = records.filter { it.type == "혈당" && it.value.toDoubleOrNull() != null }
+        .sortedWith(compareBy<VitalRecord> { it.source }.thenBy { it.timestamp })
+    val result = mutableListOf<GlucoseMeasurementGroup>()
+    var currentSource: String? = null
+    var current = mutableListOf<Pair<Long, Double>>()
+    fun flush() {
+        if (current.isNotEmpty()) {
+            val values = current.map { it.second }
+            result.add(GlucoseMeasurementGroup(currentSource.orEmpty(), current.first().first, values.average(), values))
+        }
+        current = mutableListOf()
+    }
+    sorted.forEach { record ->
+        val value = record.value.toDoubleOrNull() ?: return@forEach
+        val source = record.source.ifBlank { "기기 미지정" }
+        val previousTime = current.lastOrNull()?.first
+        if (current.isNotEmpty() && (source != currentSource || record.timestamp - (previousTime ?: record.timestamp) > maxGapMillis)) flush()
+        if (current.isEmpty()) currentSource = source
+        current.add(record.timestamp to value)
+    }
+    flush()
+    return result.sortedBy { it.timestamp }
 }
 
 private fun normalRangeForGraph(type: String): Pair<Double, Double>? = when (type) {
@@ -430,11 +459,11 @@ fun EasyHealthApp(context: Context) {
     val now = System.currentTimeMillis()
     val days = when (reportPeriod) { "1개월" -> 30; "3개월" -> 90; "전체" -> 0; else -> 7 }
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp >= now - days * 86400000L }
-    val glucoseValues = periodRecords.filter { it.type == "혈당" }.mapNotNull { it.value.toDoubleOrNull() }
+    val glucoseValues = glucoseMeasurementGroups(periodRecords).map { it.average }
     val averageGlucose = glucoseValues.takeIf { it.isNotEmpty() }?.average()
     val latestGlucose = personRecords.firstOrNull { it.type == "혈당" }
     val estimatedA1c = averageGlucose?.let { (it + 46.7) / 28.7 }
-    val homeGlucoseAverage = personRecords.filter { it.type == "혈당" && it.timestamp >= now - 90L * 86400000L }.mapNotNull { it.value.toDoubleOrNull() }.takeIf { it.isNotEmpty() }?.average()
+    val homeGlucoseAverage = glucoseMeasurementGroups(personRecords.filter { it.timestamp >= now - 90L * 86400000L }).map { it.average }.takeIf { it.isNotEmpty() }?.average()
     val homeEstimatedA1c = homeGlucoseAverage?.let { (it + 46.7) / 28.7 }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
@@ -500,7 +529,7 @@ fun EasyHealthApp(context: Context) {
                                 val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
                                 if (activeTypes.contains("혈당")) {
                                     Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                        Column(Modifier.padding(horizontal = 11.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                                             Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 27.sp, fontWeight = FontWeight.Bold)
@@ -524,7 +553,7 @@ fun EasyHealthApp(context: Context) {
                                     val diastolic = bpParts?.getOrNull(1) ?: personRecords.firstOrNull { it.type == "이완기 혈압" }?.value
                                     val pulse = bpParts?.getOrNull(2) ?: personRecords.firstOrNull { it.type == "맥박" }?.value
                                     Card(Modifier.width(158.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                             Text("혈압 · 맥박", color = Ink, fontWeight = FontWeight.SemiBold)
                                             Text(if (systolic != null && diastolic != null) "$systolic/$diastolic" else "--/--", color = bp?.let { riskFor("혈압", it.value, selectedProfile).color } ?: Color.Gray, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                                             bp?.let { Text(riskFor("혈압", it.value, selectedProfile).label, color = riskFor("혈압", it.value, selectedProfile).color, fontSize = 10.sp) }
@@ -549,7 +578,7 @@ fun EasyHealthApp(context: Context) {
                                 val scaleTypes = listOf("체중", "체지방률", "골격근량", "BMI")
                                 if (scaleTypes.any { activeTypes.contains(it) }) {
                                     Card(Modifier.width(178.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                             Text("체중계 측정값", color = Ink, fontWeight = FontWeight.SemiBold)
                                             scaleTypes.filter { activeTypes.contains(it) }.forEach { scaleType ->
                                                 val latest = personRecords.firstOrNull { it.type == scaleType }
@@ -754,7 +783,8 @@ fun EasyHealthApp(context: Context) {
                                     }
                                 }
                             }
-                            val numericValues = vitalRows.mapNotNull { it.value.toDoubleOrNull() }
+                            val numericValues = if (vital == "혈당") glucoseMeasurementGroups(vitalRows).map { it.average } else vitalRows.mapNotNull { it.value.toDoubleOrNull() }
+                            val summaryCount = if (vital == "혈당") glucoseMeasurementGroups(vitalRows).size else vitalRows.size
                             Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Text("${vital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
@@ -772,7 +802,7 @@ fun EasyHealthApp(context: Context) {
                                     } else if (numericValues.isNotEmpty()) {
                                         Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[vital] ?: ""}", color = riskFor(vital, numericValues.average().toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                         Text("평균 기준: ${riskFor(vital, numericValues.average().toString(), selectedProfile).label}", color = riskFor(vital, numericValues.average().toString(), selectedProfile).color, fontSize = 11.sp)
-                                        Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${vitalRows.size}회", color = Ink, fontSize = 12.sp)
+                                        Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${summaryCount}회", color = Ink, fontSize = 12.sp)
                                     } else {
                                         Text("총 ${vitalRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                     }
