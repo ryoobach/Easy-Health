@@ -202,6 +202,62 @@ fun EasyHealthApp(context: Context) {
     var newPerson by remember { mutableStateOf("") }
     var showDeviceInfo by remember { mutableStateOf(false) }
     var showBluetoothSearch by remember { mutableStateOf(false) }
+    var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
+    var bluetoothCandidates by remember { mutableStateOf<List<MeterCandidate>>(emptyList()) }
+    val bluetoothClient = remember { BluetoothGlucoseClient(context) }
+    val bluetoothListener = remember(selectedPerson) {
+        object : BluetoothGlucoseClient.Listener {
+            override fun onStatus(message: String) { bluetoothStatus = message }
+            override fun onDevices(devices: List<MeterCandidate>) { bluetoothCandidates = devices }
+            override fun onConnected(device: MeterCandidate) {
+                val model = if (device.name.lowercase().contains("caresens")) "CareSens Dual" else "Contour Plus ONE"
+                if (!registeredDevices.contains(model)) registeredDevices.add(model)
+                prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString()).apply()
+                val saved = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
+                val updated = JSONArray()
+                for (i in 0 until saved.length()) {
+                    val item = saved.optJSONObject(i) ?: continue
+                    if (item.optString("address") != device.address) updated.put(item)
+                }
+                updated.put(JSONObject().put("name", device.name).put("address", device.address).put("model", model))
+                prefs.edit().putString("bluetooth_devices", updated.toString()).apply()
+                showBluetoothSearch = false
+                showRegisterDeviceDialog = false
+                showDeviceInfo = false
+                android.widget.Toast.makeText(context, "$model 연결 성공", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            override fun onReadings(readings: List<MeterReading>) {
+                var imported = 0
+                val address = readings.firstOrNull()?.let { bluetoothCandidates.firstOrNull()?.address } ?: ""
+                readings.forEach { reading ->
+                    val deviceName = bluetoothCandidates.firstOrNull()?.name ?: "블루투스 측정기"
+                    val externalId = "$deviceName:${reading.sequence}:${reading.timestamp}"
+                    if (records.none { it.externalId == externalId }) {
+                        records.add(VitalRecord(UUID.randomUUID().toString(), selectedPerson, reading.type,
+                            reading.value, reading.timestamp, deviceName, "", externalId))
+                        imported++
+                    }
+                }
+                persistRecords(context, records)
+                bluetoothStatus = "$imported건의 측정 기록을 가져왔습니다."
+                android.widget.Toast.makeText(context, bluetoothStatus, android.widget.Toast.LENGTH_LONG).show()
+            }
+            override fun onError(message: String) { bluetoothStatus = message }
+        }
+    }
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants.values.all { it }) bluetoothClient.startScan(bluetoothListener)
+        else bluetoothStatus = "주변 기기 검색 및 연결 권한을 허용해 주세요."
+    }
+    fun requestBluetoothScan() {
+        val permissions = if (android.os.Build.VERSION.SDK_INT >= 31)
+            arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
+        else arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        val missing = permissions.filter { context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) bluetoothClient.startScan(bluetoothListener)
+        else bluetoothPermissionLauncher.launch(missing.toTypedArray())
+    }
+    DisposableEffect(Unit) { onDispose { bluetoothClient.close() } }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) try {
             val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
@@ -601,16 +657,32 @@ fun EasyHealthApp(context: Context) {
         AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 등록") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("등록된 기기가 없습니다. 측정기기에서 블루투스 페어링을 시작한 뒤 검색해 주세요.", color = Color.Gray, fontSize = 13.sp)
-                Button(onClick = { showBluetoothSearch = true }, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { showBluetoothSearch = true; requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("블루투스 기기 찾기")
                 }
             } },
             confirmButton = { TextButton(onClick = { showRegisterDeviceDialog = false }) { Text("닫기") } })
     }
     if (showBluetoothSearch) {
-        AlertDialog(onDismissRequest = { showBluetoothSearch = false }, title = { Text("블루투스 기기 찾기") },
-            text = { Text("실제 주변 기기 검색과 페어링 기능은 아직 연결되지 않았습니다. 다음 개발 단계에서 지원하겠습니다.", color = Color.Gray) },
-            confirmButton = { TextButton(onClick = { showBluetoothSearch = false }) { Text("확인") } })
+        AlertDialog(onDismissRequest = { bluetoothClient.stopScan(); showBluetoothSearch = false }, title = { Text("블루투스 기기 찾기") },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(bluetoothStatus, color = Color.Gray, fontSize = 12.sp)
+                    Button(onClick = { bluetoothCandidates = emptyList(); requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("다시 검색")
+                    }
+                    bluetoothCandidates.forEach { candidate ->
+                        Card(Modifier.fillMaxWidth().clickable { bluetoothStatus = "${candidate.name}에 연결을 요청했습니다."; bluetoothClient.connect(candidate, bluetoothListener) }) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(candidate.name, color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(candidate.address, color = Color.Gray, fontSize = 11.sp)
+                                Text("눌러서 연결 및 등록", color = Green, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { bluetoothClient.stopScan(); showBluetoothSearch = false }) { Text("닫기") } })
     }
     deviceDeleteTarget?.let { target ->
         AlertDialog(onDismissRequest = { deviceDeleteTarget = null },
@@ -774,9 +846,28 @@ fun EasyHealthApp(context: Context) {
             dismissButton = { TextButton(onClick = { showPeopleDialog = false }) { Text("닫기") } })
     }
     if (showDeviceInfo) {
+        val savedMeters = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
         AlertDialog(onDismissRequest = { showDeviceInfo = false }, title = { Text("블루투스 자동 가져오기") },
-            text = { Text("등록된 블루투스 측정기기에서 데이터를 가져오는 기능은 기기별 연결 지원 후 사용할 수 있습니다.") },
-            confirmButton = { TextButton(onClick = { showDeviceInfo = false }) { Text("확인") } })
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(bluetoothStatus, color = Color.Gray, fontSize = 12.sp)
+                    if (savedMeters.length() == 0) Text("먼저 기기 설정에서 측정기를 등록해 주세요.")
+                    for (i in 0 until savedMeters.length()) {
+                        val item = savedMeters.optJSONObject(i) ?: continue
+                        Card(Modifier.fillMaxWidth().clickable {
+                            bluetoothStatus = "${item.optString("model")} 연결 중입니다."
+                            bluetoothClient.connectAddress(item.optString("name"), item.optString("address"), bluetoothListener)
+                        }) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text(item.optString("model"), color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(item.optString("name"), color = Color.Gray, fontSize = 11.sp)
+                                Text("눌러서 측정 기록 가져오기", color = Green, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showDeviceInfo = false }) { Text("닫기") } })
     }
 }
 
