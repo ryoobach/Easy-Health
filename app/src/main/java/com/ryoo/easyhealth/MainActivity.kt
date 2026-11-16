@@ -606,14 +606,6 @@ fun EasyHealthApp(context: Context) {
                     Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            reportVitalTypes.forEach { vital ->
-                                FilterChip(selected = selectedReportVital == vital, onClick = {
-                                    selectedReportVital = vital
-                                    prefs.edit().putString("last_report_vital", vital).apply()
-                                }, label = { Text(vital, fontSize = 12.sp) })
-                            }
-                        }
                     }
                     ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
                         listOf("주간", "월간", "분기별", "전체").forEach { label ->
@@ -701,7 +693,7 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                     }
-                    Text("선택한 바이탈과 기간에 해당하는 실제 측정 기록만 표시합니다. 같은 항목을 측정하는 기기는 통합해 분석합니다.", color = Color.Gray, fontSize = 11.sp)
+                    Text("활성화된 모든 바이탈을 그래프와 요약으로 표시합니다. 같은 항목을 측정하는 기기는 통합해 분석합니다.", color = Color.Gray, fontSize = 11.sp)
                     OutlinedButton(onClick = { tab = "기기 설정" }, modifier = Modifier.fillMaxWidth()) { Text("리포트에 포함할 기기 설정") }
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
