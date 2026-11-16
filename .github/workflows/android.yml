@@ -56,8 +56,10 @@ jobs:
           APK_SHA="$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           echo "Signing key SHA-256: $KEY_SHA"
           echo "APK certificate SHA-256: $APK_SHA"
+          EXPECTED_SHA="e71f6e2cba41d3caef823be573636aaa1065e84022bcd7031cb4531b476b0354"
           test -n "$APK_SHA"
-          test "$KEY_SHA" = "$APK_SHA"
+          test "$KEY_SHA" = "$EXPECTED_SHA"
+          test "$APK_SHA" = "$EXPECTED_SHA"
       - name: Name APK with app version
         run: |
           APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
