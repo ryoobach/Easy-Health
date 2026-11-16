@@ -702,7 +702,7 @@ fun EasyHealthApp(context: Context) {
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("등록한 기기 중 리포트에 포함할 기기만 체크해 주세요. 같은 항목을 측정하는 기기는 통합해서 분석합니다.", color = Color.Gray, fontSize = 13.sp)
+                    Text("같은 항목을 측정하는 기기는 통합해서 분석합니다", color = Color.Gray, fontSize = 13.sp)
                     Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 등록")
                     }
