@@ -41,6 +41,8 @@ class BluetoothGlucoseClient(private val context: Context) {
     private var activeDevice: MeterCandidate? = null
     private val pending = mutableListOf<MeterReading>()
     private val ketoneSequences = mutableSetOf<Int>()
+    private val descriptorQueue = java.util.ArrayDeque<BluetoothGattDescriptor>()
+    private var descriptorWriting = false
     private var measurementReady = false
     private var contextReady = false
     private var racpReady = false
@@ -122,6 +124,8 @@ class BluetoothGlucoseClient(private val context: Context) {
         activeDevice = candidate
         pending.clear()
         ketoneSequences.clear()
+        descriptorQueue.clear()
+        descriptorWriting = false
         measurementReady = false
         contextReady = false
         racpReady = false
@@ -199,6 +203,8 @@ class BluetoothGlucoseClient(private val context: Context) {
             if (c.uuid == MEASUREMENT) measurementReady = true
             if (c.uuid == CONTEXT) contextReady = true
             if (c.uuid == RACP) racpReady = true
+            descriptorWriting = false
+            writeNextDescriptor(g)
             if (measurementReady && racpReady && (serviceHasContext(g).not() || contextReady) && !requestedRecords) {
                 requestedRecords = true
                 handler.post { listener?.onStatus("저장된 측정 기록을 요청했습니다.") }
@@ -238,8 +244,20 @@ class BluetoothGlucoseClient(private val context: Context) {
             g.setCharacteristicNotification(characteristic, true)
             val descriptor = characteristic.getDescriptor(CCCD) ?: return
             descriptor.value = if (characteristic.uuid == RACP) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            g.writeDescriptor(descriptor)
+            synchronized(descriptorQueue) { descriptorQueue.add(descriptor) }
+            writeNextDescriptor(g)
         } catch (_: Exception) { }
+    }
+
+    private fun writeNextDescriptor(g: BluetoothGatt) {
+        if (descriptorWriting) return
+        val next = synchronized(descriptorQueue) { if (descriptorQueue.isEmpty()) null else descriptorQueue.removeFirst() } ?: return
+        descriptorWriting = true
+        try {
+            if (!g.writeDescriptor(next)) descriptorWriting = false
+        } catch (_: Exception) {
+            descriptorWriting = false
+        }
     }
 
     private fun writeRacp(g: BluetoothGatt, value: ByteArray) {
