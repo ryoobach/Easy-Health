@@ -220,6 +220,19 @@ fun EasyHealthApp(context: Context) {
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(
+            modifier = Modifier.pointerInput(tab) {
+                var swipeDistance = 0f
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        val tabs = listOf("기록", "리포트", "병원 일정", "기기 설정")
+                        val index = tabs.indexOf(tab)
+                        if (swipeDistance < -90f && index < tabs.lastIndex) tab = tabs[index + 1]
+                        if (swipeDistance > 90f && index > 0) tab = tabs[index - 1]
+                        swipeDistance = 0f
+                    },
+                    onHorizontalDrag = { _, amount -> swipeDistance += amount }
+                )
+            },
             containerColor = Color(0xFFF4F8F5),
             topBar = {
                 TopAppBar(title = {
