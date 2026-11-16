@@ -225,7 +225,6 @@ fun EasyHealthApp(context: Context) {
                 prefs.edit().putString("bluetooth_devices", updated.toString()).apply()
                 showBluetoothSearch = false
                 showRegisterDeviceDialog = false
-                showDeviceInfo = false
                 android.widget.Toast.makeText(context, "$model 연결 성공", android.widget.Toast.LENGTH_SHORT).show()
             }
             override fun onReadings(readings: List<MeterReading>) {
