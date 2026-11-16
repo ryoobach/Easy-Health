@@ -638,7 +638,13 @@ fun EasyHealthApp(context: Context) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text(vital + " 측정 추이 · 총 " + vitalRows.size + "회", color = Ink, fontWeight = FontWeight.SemiBold)
                                     if (graphRows.isEmpty()) {
-                                        Text("숫자로 표시할 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                                        Text("숫자로 표시할 측정값이 없어 날짜별 기록으로 표시합니다.", color = Color.Gray, fontSize = 12.sp)
+                                        vitalRows.asReversed().forEach { row ->
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text(SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(Date(row.timestamp)), color = Color.Gray, fontSize = 11.sp)
+                                                Text(row.value, color = Ink, fontSize = 11.sp)
+                                            }
+                                        }
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
                                         Canvas(Modifier.fillMaxWidth().height(170.dp)) {
