@@ -627,113 +627,67 @@ fun EasyHealthApp(context: Context) {
                     if (reportVitalTypes.isEmpty()) {
                         Text("기기 설정에서 리포트에 포함할 기기를 체크해 주세요.", color = Color.Gray)
                     } else {
-                        val selectedRows = periodRecords.filter { it.type == selectedReportVital }.sortedByDescending { it.timestamp }
-                        val numericValues = selectedRows.mapNotNull { it.value.toDoubleOrNull() }
-                        val chartRows = selectedRows.take(30).asReversed()
-                        val chartValues = chartRows.mapNotNull { row ->
-                            val n = if (selectedReportVital == "혈압") row.value.substringBefore("/").toDoubleOrNull() else row.value.toDoubleOrNull()
-                            n?.let { row to it }
-                        }
-                        if (chartValues.isNotEmpty()) {
+                        // 등록된 모든 바이탈 항목을 각각 독립된 그래프로 표시합니다.
+                        reportVitalTypes.forEach { vital ->
+                            val vitalRows = periodRecords.filter { it.type == vital }.sortedBy { it.timestamp }
+                            val graphRows = vitalRows.mapNotNull { row ->
+                                val number = if (vital == "혈압") row.value.substringBefore("/").toDoubleOrNull() else row.value.toDoubleOrNull()
+                                number?.let { row to it }
+                            }
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text("${selectedReportVital} 측정 추이 · 최근 ${chartValues.size}회", color = Ink, fontWeight = FontWeight.SemiBold)
-                                    if (selectedReportVital == "혈당") {
-                                        Text("Y축 · 혈당 (mg/dL)", color = Color.Gray, fontSize = 10.sp)
-                                        Row(Modifier.fillMaxWidth().height(160.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                                                listOf("300", "250", "200", "150", "100", "50").forEach { tick ->
-                                                    Text(tick, color = Color.Gray, fontSize = 10.sp)
-                                                }
-                                            }
-                                            Canvas(Modifier.weight(1f).fillMaxHeight()) {
-                                                val minV = 50.0
-                                                val maxV = 300.0
-                                                val left = 2.dp.toPx()
-                                                val right = size.width - 30.dp.toPx()
-                                                val top = 8.dp.toPx()
-                                                val bottom = size.height - 20.dp.toPx()
-                                                fun xFor(index: Int) = if (chartValues.size == 1) (left + right) / 2f else left + index * (right - left) / (chartValues.size - 1)
-                                                fun yFor(value: Double) = bottom - ((value - minV) / (maxV - minV) * (bottom - top)).toFloat()
-                                                // X/Y 축과 눈금
-                                                drawLine(Color.DarkGray, Offset(left, top), Offset(left, bottom), strokeWidth = 1.5.dp.toPx())
-                                                drawLine(Color.DarkGray, Offset(left, bottom), Offset(right, bottom), strokeWidth = 1.5.dp.toPx())
-                                                listOf(50.0, 100.0, 150.0, 200.0, 250.0, 300.0).forEach { tick ->
-                                                    val y = yFor(tick)
-                                                    drawLine(Color.LightGray.copy(alpha = 0.7f), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
-                                                }
-                                                // 70 미만 저혈당, 130 초과 상승 구간을 구분하는 참고선
-                                                drawLine(Color(0xFFD32F2F), Offset(left, yFor(70.0)), Offset(right, yFor(70.0)), strokeWidth = 1.5.dp.toPx())
-                                                drawLine(Color(0xFFEF6C00), Offset(left, yFor(130.0)), Offset(right, yFor(130.0)), strokeWidth = 1.5.dp.toPx())
-                                                val glucosePoints = chartValues.mapIndexed { index, pair ->
-                                                    Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV)))
-                                                }
-                                                // 주간 리포트는 적은 측정 횟수를 고려해 점 사이를 가는 선으로 연결합니다.
-                                                if (reportPeriod == "주간") {
-                                                    for (i in 0 until glucosePoints.lastIndex) {
-                                                        drawLine(Color.Gray.copy(alpha = 0.65f), glucosePoints[i], glucosePoints[i + 1], strokeWidth = 1.5.dp.toPx())
-                                                    }
-                                                }
-                                                chartValues.forEachIndexed { index, pair ->
-                                                    val risk = riskFor(selectedReportVital, pair.first.value, selectedProfile)
-                                                    val point = glucosePoints[index]
-                                                    // 점 색상은 첫 화면 혈당 숫자와 동일한 riskFor 색상을 사용합니다.
-                                                    drawCircle(risk.color, radius = 5.dp.toPx(), center = point)
-                                                    if (pair.second < 70.0 || pair.second > 130.0) {
-                                                        drawContext.canvas.nativeCanvas.drawText(
-                                                            pair.second.toInt().toString(),
-                                                            point.x + 5.dp.toPx(),
-                                                            (point.y - 7.dp.toPx()).coerceAtLeast(top + 8.dp.toPx()),
-                                                            android.graphics.Paint().apply {
-                                                                color = risk.color.toArgb()
-                                                                textSize = 10.dp.toPx()
-                                                                isFakeBoldText = true
-                                                                textAlign = android.graphics.Paint.Align.LEFT
-                                                            }
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Text("참고선: 70 미만 저혈당 주의 · 180은 식후 1~2시간 혈당 목표 참고선", color = Color.Gray, fontSize = 10.sp)
-                                        Text("공복 혈당 목표는 일반적으로 80~130 mg/dL이며, 개인별 목표와 측정 시점에 따라 해석이 달라집니다.", color = Color.Gray, fontSize = 10.sp)
+                                    Text(vital + " 측정 추이 · 총 " + vitalRows.size + "회", color = Ink, fontWeight = FontWeight.SemiBold)
+                                    if (graphRows.isEmpty()) {
+                                        Text("숫자로 표시할 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                     } else {
-                                        Text("Y축 · 측정값 (" + (units[selectedReportVital]?.ifBlank { "단위 없음" } ?: "측정값") + ")", color = Color.Gray, fontSize = 10.sp)
-                                        Canvas(Modifier.fillMaxWidth().height(150.dp)) {
-                                            val vals = chartValues.map { it.second }
-                                            val rawMin = vals.minOrNull() ?: 0.0
-                                            val rawMax = vals.maxOrNull() ?: 1.0
+                                        Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
+                                        Canvas(Modifier.fillMaxWidth().height(170.dp)) {
+                                            val values = graphRows.map { it.second }
+                                            val rawMin = values.minOrNull() ?: 0.0
+                                            val rawMax = values.maxOrNull() ?: 1.0
                                             val spread = (rawMax - rawMin).takeIf { it > 0.0 } ?: (kotlin.math.abs(rawMax) * 0.2).coerceAtLeast(1.0)
-                                            val minV = rawMin - spread * 0.1
-                                            val maxV = rawMax + spread * 0.1
-                                            val left = 34.dp.toPx()
-                                            val right = size.width - 6.dp.toPx()
+                                            val minV = if (vital == "혈당") 50.0 else rawMin - spread * 0.12
+                                            val maxV = if (vital == "혈당") 300.0 else rawMax + spread * 0.12
+                                            val left = 42.dp.toPx()
+                                            val right = size.width - 8.dp.toPx()
                                             val top = 8.dp.toPx()
-                                            val bottom = size.height - 24.dp.toPx()
-                                            fun xFor(index: Int) = if (chartValues.size == 1) (left + right) / 2f else left + index * (right - left) / (chartValues.size - 1)
+                                            val bottom = size.height - 27.dp.toPx()
+                                            fun xFor(index: Int) = if (graphRows.size == 1) (left + right) / 2f else left + index * (right - left) / (graphRows.size - 1)
                                             fun yFor(value: Double) = bottom - ((value - minV) / (maxV - minV) * (bottom - top)).toFloat()
                                             drawLine(Color.DarkGray, Offset(left, top), Offset(left, bottom), strokeWidth = 1.5.dp.toPx())
                                             drawLine(Color.DarkGray, Offset(left, bottom), Offset(right, bottom), strokeWidth = 1.5.dp.toPx())
-                                            val ticks = (0..4).map { minV + (maxV - minV) * it / 4.0 }
-                                            ticks.forEach { tick ->
+                                            (0..4).forEach { tickIndex ->
+                                                val tick = minV + (maxV - minV) * tickIndex / 4.0
                                                 val y = yFor(tick)
                                                 drawLine(Color.LightGray.copy(alpha = 0.7f), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
                                                 drawContext.canvas.nativeCanvas.drawText(String.format(Locale.KOREA, "%.1f", tick), 0f, y + 4.dp.toPx(), android.graphics.Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 9.dp.toPx() })
                                             }
-                                            val pts = chartValues.mapIndexed { index, pair -> Offset(xFor(index), yFor(pair.second)) }
-                                            for (i in 0 until pts.lastIndex) drawLine(Color.Gray.copy(alpha = 0.65f), pts[i], pts[i + 1], strokeWidth = 1.5.dp.toPx())
-                                            pts.forEachIndexed { index, point -> drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point) }
+                                            val points = graphRows.mapIndexed { index, pair -> Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV))) }
+                                            for (i in 0 until points.lastIndex) drawLine(Color.Gray.copy(alpha = 0.65f), points[i], points[i + 1], strokeWidth = 1.5.dp.toPx())
+                                            points.forEachIndexed { index, point ->
+                                                drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = 4.5.dp.toPx(), center = point)
+                                            }
+                                            val datePaint = android.graphics.Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 9.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER }
+                                            val dateIndices = listOf(0, graphRows.size / 2, graphRows.lastIndex).distinct()
+                                            dateIndices.forEach { index ->
+                                                val date = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(graphRows[index].first.timestamp))
+                                                drawContext.canvas.nativeCanvas.drawText(date, xFor(index), size.height - 5.dp.toPx(), datePaint)
+                                            }
+                                        }
+                                        // 그래프의 각 점에 대응하는 날짜와 원래 측정값을 빠짐없이 표시합니다.
+                                        Text("날짜 · 측정값", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                        vitalRows.asReversed().forEach { row ->
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text(SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(Date(row.timestamp)), color = Color.Gray, fontSize = 11.sp)
+                                                Text(row.value + (units[vital]?.takeIf { it.isNotBlank() }?.let { " $it" } ?: ""), color = riskFor(vital, row.value, selectedProfile).color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                            }
                                         }
                                     }
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(chartValues.firstOrNull()?.first?.let { SimpleDateFormat("MM.dd HH:mm", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
-                                        Text(chartValues.lastOrNull()?.first?.let { SimpleDateFormat("MM.dd HH:mm", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
-                                    }
-                                    Text("초록: 참고 범위 · 노랑/주황: 주의 · 빨강: 위험 신호 · 파랑: 개인별 참고", color = Color.Gray, fontSize = 10.sp)
-                                    Text("색상은 일반적인 참고 기준이며 진단이 아닙니다. 혈당은 공복·식후 여부, 혈압은 측정 조건 등에 따라 해석이 달라질 수 있습니다.", color = Color.Gray, fontSize = 10.sp)
                                 }
                             }
                         }
+                        val selectedRows = periodRecords.filter { it.type == selectedReportVital }.sortedByDescending { it.timestamp }
+                        val numericValues = selectedRows.mapNotNull { it.value.toDoubleOrNull() }
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text("${selectedReportVital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
