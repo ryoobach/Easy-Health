@@ -37,6 +37,17 @@ jobs:
           gradle-version: '8.10.2'
       - name: Build APK with the established signing key
         run: gradle --no-daemon --no-build-cache --rerun-tasks assembleDebug
+      - name: Verify update identity and version
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APK_ANALYZER="$(find "$ANDROID_HOME" -type f -name apkanalyzer | head -n 1)"
+          test -n "$APK_ANALYZER"
+          APP_ID="$("$APK_ANALYZER" manifest application-id "$APK")"
+          VERSION_CODE="$("$APK_ANALYZER" manifest version-code "$APK")"
+          echo "Application ID: $APP_ID"
+          echo "Version code: $VERSION_CODE"
+          test "$APP_ID" = "com.ryoo.easyhealth"
+          test "$VERSION_CODE" -ge 19
       - name: Verify APK uses the established signing certificate
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
