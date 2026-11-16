@@ -262,7 +262,7 @@ fun EasyHealthApp(context: Context) {
                         TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 4.dp)) {
                             Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
                         }
-                        IconButton(onClick = { newPerson = ""; showPeopleDialog = true }) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green) }
+                        IconButton(onClick = { newPerson = ""; showPeopleDialog = true }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green) }
                         IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }) {
                             Icon(Icons.Default.Home, contentDescription = "홈", tint = Green)
                         }
