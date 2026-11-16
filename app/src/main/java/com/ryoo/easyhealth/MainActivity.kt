@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -457,8 +458,15 @@ fun EasyHealthApp(context: Context) {
     val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
     if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
-    val days = when (reportPeriod) { "1개월" -> 30; "3개월" -> 90; "전체" -> 0; else -> 7 }
-    val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp >= now - days * 86400000L }
+    val reportStart = Calendar.getInstance().apply {
+        timeInMillis = now
+        when (reportPeriod) {
+            "주간" -> add(Calendar.DAY_OF_YEAR, -7)
+            "1개월" -> add(Calendar.MONTH, -1)
+            "3개월" -> add(Calendar.MONTH, -3)
+        }
+    }.timeInMillis
+    val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp in reportStart..now }
     val glucoseValues = glucoseMeasurementGroups(periodRecords).map { it.average }
     val averageGlucose = glucoseValues.takeIf { it.isNotEmpty() }?.average()
     val latestGlucose = personRecords.firstOrNull { it.type == "혈당" }
@@ -720,14 +728,19 @@ fun EasyHealthApp(context: Context) {
                     if (reportVitalTypes.isNotEmpty()) {
                     }
                     ScrollableTabRow(selectedTabIndex = listOf("주간", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
-                        listOf("주간", "월간", "3개월", "전체").forEach { label ->
+                        listOf("주간", "1개월", "3개월", "전체").forEach { label ->
                             Tab(selected = reportPeriod == label, onClick = {
                                 reportPeriod = label
                                 prefs.edit().putString("last_report_period", label).apply()
                             }, text = { Text(label) })
                         }
                     }
-                    Text(when (reportPeriod) { "전체" -> "전체 기록 기준"; "3개월" -> "최근 3개월 기준"; else -> "최근 ${days}일 기준" }, color = Color.Gray, fontSize = 12.sp)
+                    Text(when (reportPeriod) {
+                        "주간" -> "현재부터 1주일 전까지"
+                        "1개월" -> "현재부터 1개월 전까지"
+                        "3개월" -> "현재부터 3개월 전까지"
+                        else -> "전체 기록 기준"
+                    }, color = Color.Gray, fontSize = 12.sp)
                     if (reportVitalTypes.isEmpty()) {
                         Text("등록된 기기의 측정 기록이 쌓이면 여기에 표시됩니다.", color = Color.Gray)
                     } else {
