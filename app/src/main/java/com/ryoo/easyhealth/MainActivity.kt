@@ -145,6 +145,17 @@ private fun mealPeriodFor(timestamp: Long, profile: PersonProfile): MealPeriod? 
     return null
 }
 
+private fun normalRangeForGraph(type: String): Pair<Double, Double>? = when (type) {
+    "혈당" -> 70.0 to 130.0
+    "혈압" -> 90.0 to 120.0
+    "체온" -> 35.5 to 37.5
+    "산소포화도" -> 95.0 to 100.0
+    "호흡수" -> 12.0 to 20.0
+    "맥박" -> 60.0 to 100.0
+    "BMI" -> 18.5 to 25.0
+    else -> null
+}
+
 private fun riskFor(type: String, value: String, profile: PersonProfile? = null): RiskInfo {
     val red = Color(0xFFD32F2F)
     val orange = Color(0xFFEF6C00)
@@ -715,6 +726,11 @@ fun EasyHealthApp(context: Context) {
                                             val bottom = size.height - 27.dp.toPx()
                                             fun xFor(index: Int) = if (graphRows.size == 1) (left + right) / 2f else left + index * (right - left) / (graphRows.size - 1)
                                             fun yFor(value: Double) = bottom - ((value - minV) / (maxV - minV) * (bottom - top)).toFloat()
+                                                                                        normalRangeForGraph(vital)?.let { range ->
+                                                val upper = yFor(range.second.coerceIn(minV, maxV))
+                                                val lower = yFor(range.first.coerceIn(minV, maxV))
+                                                if (upper < lower) drawRect(Color(0xFF16834A).copy(alpha = 0.075f), Offset(left, upper), androidx.compose.ui.geometry.Size(right - left, lower - upper))
+                                            }
                                             drawLine(Color.DarkGray, Offset(left, top), Offset(left, bottom), strokeWidth = 1.5.dp.toPx())
                                             drawLine(Color.DarkGray, Offset(left, bottom), Offset(right, bottom), strokeWidth = 1.5.dp.toPx())
                                             (0..4).forEach { tickIndex ->
