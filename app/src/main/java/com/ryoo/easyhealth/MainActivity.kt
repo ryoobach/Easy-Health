@@ -456,7 +456,8 @@ fun EasyHealthApp(context: Context) {
                                             Text(if (systolic != null && diastolic != null) "$systolic/$diastolic" else "--/--", color = bp?.let { riskFor("혈압", it.value, selectedProfile).color } ?: Color.Gray, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                                             bp?.let { Text(riskFor("혈압", it.value, selectedProfile).label, color = riskFor("혈압", it.value, selectedProfile).color, fontSize = 10.sp) }
                                             Text("mmHg", color = Green, fontSize = 11.sp)
-                                            Text("맥박 ${pulse ?: "--"}회/분", color = Ink, fontSize = 12.sp)
+                                            Text("맥박 ${pulse ?: "--"}회/분", color = pulse?.let { riskFor("맥박", it, selectedProfile).color } ?: Color.Gray, fontSize = 12.sp)
+                                            pulse?.let { Text(riskFor("맥박", it, selectedProfile).label, color = riskFor("맥박", it, selectedProfile).color, fontSize = 10.sp) }
                                         }
                                     }
                                 }
@@ -651,6 +652,7 @@ fun EasyHealthApp(context: Context) {
                                         Text(chartValues.lastOrNull()?.first?.let { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
                                     }
                                     Text("초록: 참고 범위 · 노랑/주황: 주의 · 빨강: 위험 신호 · 파랑: 개인별 참고", color = Color.Gray, fontSize = 10.sp)
+                                    Text("색상은 일반적인 참고 기준이며 진단이 아닙니다. 혈당은 공복·식후 여부, 혈압은 측정 조건 등에 따라 해석이 달라질 수 있습니다.", color = Color.Gray, fontSize = 10.sp)
                                 }
                             }
                         }
