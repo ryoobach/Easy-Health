@@ -41,4 +41,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Easy-Health-1.12
-          path: "이지헬스 1.11.apk"
+          path: "Easy-Health-1.12.apk"
