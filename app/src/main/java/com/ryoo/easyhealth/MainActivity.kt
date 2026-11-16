@@ -239,7 +239,7 @@ fun EasyHealthApp(context: Context) {
                     }
                 }
                 persistRecords(context, records)
-                bluetoothStatus = "$imported건의 측정 기록을 가져왔습니다."
+                bluetoothStatus = "\${imported}건의 측정 기록을 가져왔습니다."
                 android.widget.Toast.makeText(context, bluetoothStatus, android.widget.Toast.LENGTH_LONG).show()
             }
             override fun onError(message: String) { bluetoothStatus = message }
