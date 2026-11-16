@@ -433,21 +433,21 @@ fun EasyHealthApp(context: Context) {
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 val glucoseRecord = personRecords.firstOrNull { it.type == "혈당" }
                                 if (activeTypes.contains("혈당")) {
-                                    Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold)
-                                            Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                                            glucoseRecord?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
-                                            Text("mg/dL", color = Green, fontSize = 11.sp)
-                                            Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 10.sp)
-                                        }
-                                    }
-                                    Card(Modifier.width(148.dp), colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Text("당화혈색소 추정치", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                            Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                                            homeEstimatedA1c?.let { Text(riskFor("당화혈색소 추정치", it.toString(), selectedProfile).label, color = riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color, fontSize = 10.sp) }
-                                            Text("평균 혈당 기반 추정", color = Color.Gray, fontSize = 10.sp)
+                                    Card(Modifier.width(148.dp), colors = CardDefaults.cardCardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
+                                        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text("혈당", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                Text(glucoseRecord?.value ?: "--", color = glucoseRecord?.let { riskFor(it.type, it.value, selectedProfile).color } ?: Color.Gray, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                                Text("mg/dL", color = Green, fontSize = 10.sp, modifier = Modifier.padding(bottom = 4.dp))
+                                            }
+                                            glucoseRecord?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }
+                                            Text(glucoseRecord?.let { dateFormat.format(Date(it.timestamp)) } ?: "기록 없음", color = Color.Gray, fontSize = 9.sp)
+                                            HorizontalDivider(color = Color(0xFFD5E8D9), thickness = 1.dp)
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                Text("당화혈색소", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 10.sp)
+                                                Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text("최근 90일 평균 혈당 기반 추정", color = Color.Gray, fontSize = 8.sp)
                                         }
                                     }
                                 }
