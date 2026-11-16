@@ -254,7 +254,7 @@ class BluetoothGlucoseClient(private val context: Context) {
         val next = synchronized(descriptorQueue) { if (descriptorQueue.isEmpty()) null else descriptorQueue.removeFirst() } ?: return
         descriptorWriting = true
         try {
-            if (!g.writeDescriptor(next)) descriptorWriting = false
+            if (!g.writeDescriptor(next)) { descriptorWriting = false; writeNextDescriptor(g) }
         } catch (_: Exception) {
             descriptorWriting = false
         }
@@ -290,11 +290,16 @@ class BluetoothGlucoseClient(private val context: Context) {
             val mgdl = if ((flags and 0x04) == 0) raw * 100000.0 else raw * 18.0182
             if ((flags and 0x02) != 0) p++
             if ((flags and 0x08) != 0) p++
-            val cal = java.util.Calendar.getInstance().apply {
-                set(year, month - 1, day, hour, minute, second)
-                set(java.util.Calendar.MILLISECOND, 0)
+            val timestamp = if ((flags and 0x01) != 0) {
+                java.time.LocalDateTime.of(year, month, day, hour, minute, second)
+                    .toInstant(java.time.ZoneOffset.ofTotalSeconds(offset * 60)).toEpochMilli()
+            } else {
+                java.util.Calendar.getInstance().apply {
+                    set(year, month - 1, day, hour, minute, second)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }.timeInMillis
             }
-            MeterReading("혈당", String.format(java.util.Locale.US, "%.0f", mgdl), cal.timeInMillis + offset * 60000L, seq)
+            MeterReading("혈당", String.format(java.util.Locale.US, "%.0f", mgdl), timestamp, seq)
         } catch (_: Exception) { null }
     }
 
