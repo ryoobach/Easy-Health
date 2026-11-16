@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Restore persistent Android debug signing key
+        id: android-signing-cache
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
@@ -22,20 +23,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Create persistent debug signing key when absent
+      - name: Verify persistent signing key was restored
+        if: steps.android-signing-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          echo 'ERROR: The original Easy Health signing key was not restored.'
+          echo 'Refusing to create a new key because it would prevent upgrading over the installed app.'
+          exit 1
+      - name: Confirm APK signing certificate
+        run: keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA256:'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Name APK with app version
-        run: cp app/build/outputs/apk/debug/app-debug.apk "이지헬스 1.09.apk"
+        run: cp app/build/outputs/apk/debug/app-debug.apk "이지헬스 1.10.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: 이지헬스-1.09
-          path: "이지헬스 1.09.apk"
+          path: "이지헬스 1.10.apk"
