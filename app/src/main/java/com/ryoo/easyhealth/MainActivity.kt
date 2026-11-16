@@ -665,9 +665,19 @@ fun EasyHealthApp(context: Context) {
                                                 // 70 미만 저혈당, 130 초과 상승 구간을 구분하는 참고선
                                                 drawLine(Color(0xFFD32F2F), Offset(left, yFor(70.0)), Offset(right, yFor(70.0)), strokeWidth = 1.5.dp.toPx())
                                                 drawLine(Color(0xFFEF6C00), Offset(left, yFor(130.0)), Offset(right, yFor(130.0)), strokeWidth = 1.5.dp.toPx())
+                                                val glucosePoints = chartValues.mapIndexed { index, pair ->
+                                                    Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV)))
+                                                }
+                                                // 주간 리포트는 적은 측정 횟수를 고려해 점 사이를 가는 선으로 연결합니다.
+                                                if (reportPeriod == "주간") {
+                                                    for (i in 0 until glucosePoints.lastIndex) {
+                                                        drawLine(Color.Gray.copy(alpha = 0.65f), glucosePoints[i], glucosePoints[i + 1], strokeWidth = 1.5.dp.toPx())
+                                                    }
+                                                }
                                                 chartValues.forEachIndexed { index, pair ->
                                                     val risk = riskFor(selectedReportVital, pair.first.value, selectedProfile)
-                                                    val point = Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV)))
+                                                    val point = glucosePoints[index]
+                                                    // 점 색상은 첫 화면 혈당 숫자와 동일한 riskFor 색상을 사용합니다.
                                                     drawCircle(risk.color, radius = 5.dp.toPx(), center = point)
                                                     if (pair.second < 70.0 || pair.second > 130.0) {
                                                         drawContext.canvas.nativeCanvas.drawText(
