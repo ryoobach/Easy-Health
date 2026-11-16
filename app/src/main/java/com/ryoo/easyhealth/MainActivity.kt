@@ -424,15 +424,14 @@ fun EasyHealthApp(context: Context) {
                     } else {
                         val glucoseRecords = periodRecords.filter { it.type == "혈당" }
                         val glucoseNums = glucoseRecords.mapNotNull { it.value.toDoubleOrNull() }
+                        // 기록 탭과 동일한 공통 바이탈 순서: 혈당 → 당화혈색소 추정치 → 혈압 → 체온 → 체중 → 기타
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("혈당 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                                 Text(averageGlucose?.let { "평균 ${it.toInt()} mg/dL" } ?: "혈당 기록 없음", color = Green, fontWeight = FontWeight.Bold, fontSize = 25.sp)
                                 if (glucoseNums.isNotEmpty()) {
                                     Text("최고 ${glucoseNums.maxOrNull()!!.toInt()} · 최저 ${glucoseNums.minOrNull()!!.toInt()} mg/dL · 총 ${glucoseNums.size}회", color = Ink, fontSize = 12.sp)
-                                    Text("당화혈색소 추정치: ${estimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--"}", color = Ink, fontWeight = FontWeight.SemiBold)
                                 }
-                                Text("평균 혈당으로 계산한 참고용 추정치이며 검사실 당화혈색소 결과를 대신하지 않습니다.", color = Color.Gray, fontSize = 10.sp)
                             }
                         }
                         if (glucoseRecords.isNotEmpty()) {
@@ -454,6 +453,15 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
+                        // 당화혈색소 추정치는 혈당 바로 다음에 표시합니다.
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("당화혈색소 추정치", color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(estimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "기록 없음", color = Green, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                                Text("평균 혈당으로 계산한 참고용 추정치이며 검사실 당화혈색소 결과를 대신하지 않습니다.", color = Color.Gray, fontSize = 10.sp)
+                            }
+                        }
+                        // 혈압은 수축기·이완기·맥박을 하나의 묶음으로 표시합니다.
                         val bpRecords = periodRecords.filter { it.type == "혈압" }
                         if (activeTypes.contains("혈압")) {
                             val parsedBp = bpRecords.mapNotNull { r ->
@@ -469,24 +477,29 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
-                        activeTypes.filter { it !in listOf("혈당", "혈압", "식사", "운동", "수면", "특이사항") }.forEach { type ->
-                            val rows = periodRecords.filter { it.type == type }
-                            val values = rows.mapNotNull { it.value.toDoubleOrNull() }
-                            val unit = units[type] ?: ""
-                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Text(type, color = Ink, fontWeight = FontWeight.SemiBold)
-                                    if (rows.isEmpty()) Text("기록 없음", color = Color.Gray)
-                                    else if (values.isNotEmpty()) {
-                                        Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} ${unit} · 최고 ${values.maxOrNull()} · 최저 ${values.minOrNull()}", color = Green, fontWeight = FontWeight.Medium)
-                                        Text("총 ${rows.size}회 · 최근 ${rows.first().value} ${unit}", color = Color.Gray, fontSize = 11.sp)
-                                    } else {
-                                        Text("총 ${rows.size}건 · 최근 기록: ${rows.first().value}", color = Green, fontSize = 12.sp)
+                        // 나머지 바이탈도 기록 탭의 공통 순서를 기준으로 정렬합니다.
+                        val reportVitalOrder = listOf("체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤")
+                        activeTypes.filter { it !in listOf("혈당", "혈압", "식사", "운동", "수면", "특이사항", "맥박") }
+                            .distinct()
+                            .sortedWith(compareBy<String> { reportVitalOrder.indexOf(it).let { index -> if (index < 0) Int.MAX_VALUE else index } }.thenBy { it })
+                            .forEach { type ->
+                                val rows = periodRecords.filter { it.type == type }
+                                val values = rows.mapNotNull { it.value.toDoubleOrNull() }
+                                val unit = units[type] ?: ""
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Text(type, color = Ink, fontWeight = FontWeight.SemiBold)
+                                        if (rows.isEmpty()) Text("기록 없음", color = Color.Gray)
+                                        else if (values.isNotEmpty()) {
+                                            Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} ${unit} · 최고 ${values.maxOrNull()} · 최저 ${values.minOrNull()}", color = Green, fontWeight = FontWeight.Medium)
+                                            Text("총 ${rows.size}회 · 최근 ${rows.first().value} ${unit}", color = Color.Gray, fontSize = 11.sp)
+                                        } else {
+                                            Text("총 ${rows.size}건 · 최근 기록: ${rows.first().value}", color = Green, fontSize = 12.sp)
+                                        }
+                                        rows.firstOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 10.sp) }
                                     }
-                                    rows.firstOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 10.sp) }
                                 }
                             }
-                        }
                         listOf("식사", "운동", "수면", "특이사항").filter { activeTypes.contains(it) }.forEach { type ->
                             val rows = periodRecords.filter { it.type == type }
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
