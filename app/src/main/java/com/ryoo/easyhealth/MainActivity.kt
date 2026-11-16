@@ -1076,7 +1076,7 @@ private fun RecordDialog(
     var selectedDevice by remember(existing, registeredDevices) {
         mutableStateOf(
             availableDevices.firstOrNull { it.first == existing?.source }?.first
-                ?: availableDevices.firstOrNull { device -> existing?.type in device.second }?.first
+                ?: availableDevices.firstOrNull { device -> existing != null && existing.type in device.second }?.first
                 ?: availableDevices.firstOrNull()?.first.orEmpty()
         )
     }
