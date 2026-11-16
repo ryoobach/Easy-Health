@@ -18,6 +18,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import android.content.Intent
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -190,6 +193,10 @@ fun EasyHealthApp(context: Context) {
     var showRecordDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<VitalRecord?>(null) }
     var showPeopleDialog by remember { mutableStateOf(false) }
+    val registeredDevices = remember { mutableStateListOf<String>().apply { val a = JSONArray(prefs.getString("registered_devices", "[]") ?: "[]"); for (i in 0 until a.length()) add(a.optString(i)) } }
+    var showRegisterDeviceDialog by remember { mutableStateOf(false) }
+    val registerSelections = remember { mutableStateListOf<String>() }
+    var deviceDeleteTarget by remember { mutableStateOf<String?>(null) }
     var newPerson by remember { mutableStateOf("") }
     var showDeviceInfo by remember { mutableStateOf(false) }
     var showAppInfo by remember { mutableStateOf(false) }
@@ -226,6 +233,7 @@ fun EasyHealthApp(context: Context) {
                         TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 4.dp)) {
                             Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
                         }
+                        IconButton(onClick = { newPerson = ""; showPeopleDialog = true }) { Icon(Icons.Default.Add, contentDescription = "사용자 추가", tint = Green) }
                         IconButton(onClick = { (context as? Activity)?.moveTaskToBack(true) }) {
                             Icon(Icons.Default.Home, contentDescription = "홈", tint = Green)
                         }
@@ -408,7 +416,7 @@ fun EasyHealthApp(context: Context) {
 
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("$selectedPerson 건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
+                    Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0),
                         containerColor = Color.Transparent, edgePadding = 0.dp) {
                         listOf("주간", "월간", "분기별", "전체").forEach { label ->
