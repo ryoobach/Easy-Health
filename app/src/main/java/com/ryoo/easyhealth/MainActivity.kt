@@ -656,7 +656,7 @@ fun EasyHealthApp(context: Context) {
     if (showRegisterDeviceDialog) {
         AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 등록") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("등록된 기기가 없습니다. 측정기기에서 블루투스 페어링을 시작한 뒤 검색해 주세요.", color = Color.Gray, fontSize = 13.sp)
+                Text("Contour Plus ONE: 전원을 끄고 OK 버튼을 파란 불이 깜박일 때까지 길게 누르세요. CareSens Dual: S 버튼을 3초 누르고 YES → BT → PAIR를 선택하세요. 측정기 화면의 PIN이 휴대폰에 표시되면 확인해 주세요.", color = Color.Gray, fontSize = 12.sp)
                 Button(onClick = { showBluetoothSearch = true; requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("블루투스 기기 찾기")
                 }
