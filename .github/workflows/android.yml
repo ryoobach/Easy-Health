@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Restore persistent Android debug signing key
+      - name: Restore persistent Android signing key
         id: android-signing-cache
         uses: actions/cache@v4
         with:
@@ -23,22 +23,37 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Verify persistent signing key was restored
+      - name: Require the established signing key
         if: steps.android-signing-cache.outputs.cache-hit != 'true'
         run: |
-          echo 'ERROR: The original Easy Health signing key was not restored.'
-          echo 'Refusing to create a new key because it would prevent upgrading over the installed app.'
+          echo 'ERROR: The established Easy Health signing key was not restored.'
+          echo 'A new key would break in-place updates, so this build is stopped.'
           exit 1
-      - name: Confirm APK signing certificate
-        run: keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA256:'
+      - name: Record established signing certificate
+        run: |
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA256:'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+      - name: Build APK with the established signing key
+        run: gradle --no-daemon --no-build-cache --rerun-tasks assembleDebug
+      - name: Verify APK uses the established signing certificate
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          KEY_SHA="$(keytool -exportcert -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | sha256sum | awk '{print tolower($1)}')"
+          APK_SHA="$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          echo "Signing key SHA-256: $KEY_SHA"
+          echo "APK certificate SHA-256: $APK_SHA"
+          test -n "$APK_SHA"
+          test "$KEY_SHA" = "$APK_SHA"
       - name: Name APK with app version
-        run: cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.15.apk"
+        run: |
+          APP_VERSION="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$APP_VERSION"
+          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-$APP_VERSION.apk"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: Easy-Health-1.15
-          path: "Easy-Health-1.15.apk"
+          name: Easy-Health-${{ env.APP_VERSION }}
+          path: "Easy-Health-${{ env.APP_VERSION }}.apk"
