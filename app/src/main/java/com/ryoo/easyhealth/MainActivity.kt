@@ -259,6 +259,7 @@ fun EasyHealthApp(context: Context) {
                     }
                 }, actions = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Spacer(Modifier.width(16.dp))
                         TextButton(onClick = { showPeopleDialog = true }, contentPadding = PaddingValues(horizontal = 4.dp)) {
                             Text(selectedPerson + " ▾", color = Green, fontSize = 11.sp)
                         }
