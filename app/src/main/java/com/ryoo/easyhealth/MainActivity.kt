@@ -461,7 +461,7 @@ fun EasyHealthApp(context: Context) {
     val reportStart = Calendar.getInstance().apply {
         timeInMillis = now
         when (reportPeriod) {
-            "주간" -> add(Calendar.DAY_OF_YEAR, -7)
+            "1주일" -> add(Calendar.DAY_OF_YEAR, -7)
             "1개월" -> add(Calendar.MONTH, -1)
             "3개월" -> add(Calendar.MONTH, -3)
         }
@@ -727,8 +727,8 @@ fun EasyHealthApp(context: Context) {
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
-                    ScrollableTabRow(selectedTabIndex = listOf("주간", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
-                        listOf("주간", "1개월", "3개월", "전체").forEach { label ->
+                    ScrollableTabRow(selectedTabIndex = listOf("1주일", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
+                        listOf("1주일", "1개월", "3개월", "전체").forEach { label ->
                             Tab(selected = reportPeriod == label, onClick = {
                                 reportPeriod = label
                                 prefs.edit().putString("last_report_period", label).apply()
@@ -736,7 +736,7 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                     Text(when (reportPeriod) {
-                        "주간" -> "현재부터 1주일 전까지"
+                        "1주일" -> "현재부터 1주일 전까지"
                         "1개월" -> "현재부터 1개월 전까지"
                         "3개월" -> "현재부터 3개월 전까지"
                         else -> "전체 기록 기준"
@@ -1044,7 +1044,7 @@ fun EasyHealthApp(context: Context) {
                     Text("3. 블루투스 측정기기", fontWeight = FontWeight.Bold, color = Ink)
                     Text("기기 설정에서 측정기기를 등록하고 연결 상태를 확인합니다. 블루투스 자동 가져오기를 누른 뒤 기기를 선택하면 측정값을 가져올 수 있습니다. 기기별 연결 방법도 확인할 수 있습니다.")
                     Text("4. 건강 리포트", fontWeight = FontWeight.Bold, color = Ink)
-                    Text("리포트 화면에서 주간, 월간, 분기별 또는 전체 기간의 기록을 확인할 수 있습니다. 필요한 건강 항목을 선택해 평균, 최고·최저값과 측정 추이를 살펴보세요.")
+                    Text("리포트 화면에서 1주일, 1개월, 3개월 또는 전체 기간의 기록을 확인할 수 있습니다. 필요한 건강 항목을 선택해 평균, 최고·최저값과 측정 추이를 살펴보세요.")
                     Text("5. 병원 일정", fontWeight = FontWeight.Bold, color = Ink)
                     Text("병원 일정에서 방문 날짜와 시간을 등록하고 메모를 남길 수 있습니다.")
                     Text("참고: 화면의 색상과 기준은 일반적인 참고 정보이며 의료진의 진단을 대신하지 않습니다. 측정 조건과 개인별 목표에 따라 해석이 달라질 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
