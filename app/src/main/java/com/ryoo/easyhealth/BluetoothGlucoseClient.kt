@@ -141,6 +141,24 @@ class BluetoothGlucoseClient(private val context: Context) {
         }
     }
 
+
+    fun connectAddress(name: String, address: String, listener: Listener) {
+        if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
+            listener.onError("블루투스 연결 권한이 필요합니다.")
+            return
+        }
+        try {
+            val device = adapter?.getRemoteDevice(address)
+            if (device == null) {
+                listener.onError("등록된 측정기를 찾을 수 없습니다.")
+                return
+            }
+            connect(MeterCandidate(name, address, device), listener)
+        } catch (e: Exception) {
+            listener.onError("등록된 측정기에 연결하지 못했습니다: ${e.localizedMessage ?: "오류"}")
+        }
+    }
+
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
