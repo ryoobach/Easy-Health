@@ -40,6 +40,7 @@ class BluetoothGlucoseClient(private val context: Context) {
     private var listener: Listener? = null
     private var activeDevice: MeterCandidate? = null
     private val pending = mutableListOf<MeterReading>()
+    private val ketoneSequences = mutableSetOf<Int>()
     private var measurementReady = false
     private var contextReady = false
     private var racpReady = false
@@ -120,6 +121,7 @@ class BluetoothGlucoseClient(private val context: Context) {
         closeGatt()
         activeDevice = candidate
         pending.clear()
+        ketoneSequences.clear()
         measurementReady = false
         contextReady = false
         racpReady = false
@@ -169,6 +171,7 @@ class BluetoothGlucoseClient(private val context: Context) {
             }
             enableNotifications(g, measurement)
             service.getCharacteristic(CONTEXT)?.let { enableNotifications(g, it) }
+            enableNotifications(g, racp)
             handler.post { listener?.onStatus("측정 기록 수신을 준비하고 있습니다.") }
         }
 
@@ -177,7 +180,8 @@ class BluetoothGlucoseClient(private val context: Context) {
             val c = descriptor.characteristic
             if (c.uuid == MEASUREMENT) measurementReady = true
             if (c.uuid == CONTEXT) contextReady = true
-            if (measurementReady && (serviceHasContext(g).not() || contextReady) && !requestedRecords) {
+            if (c.uuid == RACP) racpReady = true
+            if (measurementReady && racpReady && (serviceHasContext(g).not() || contextReady) && !requestedRecords) {
                 requestedRecords = true
                 handler.post { listener?.onStatus("저장된 측정 기록을 요청했습니다.") }
                 writeRacp(g, byteArrayOf(0x01, 0x01))
@@ -187,12 +191,18 @@ class BluetoothGlucoseClient(private val context: Context) {
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val bytes = characteristic.value ?: return
             if (characteristic.uuid == MEASUREMENT) parseMeasurement(bytes)?.let { reading ->
-                synchronized(pending) { pending.removeAll { it.sequence == reading.sequence }; pending.add(reading) }
+                synchronized(pending) {
+                    pending.removeAll { it.sequence == reading.sequence }
+                    pending.add(if (ketoneSequences.contains(reading.sequence)) reading.copy(type = "케톤", value = (reading.value.toDoubleOrNull()?.div(10.0)?.toString() ?: reading.value)) else reading)
+                }
             } else if (characteristic.uuid == CONTEXT) {
                 parseContext(bytes)?.let { contextInfo ->
                     synchronized(pending) {
-                        val index = pending.indexOfFirst { it.sequence == contextInfo.first }
-                        if (index >= 0 && contextInfo.second) pending[index] = pending[index].copy(type = "케톤", value = (pending[index].value.toDoubleOrNull()?.div(10.0)?.toString() ?: pending[index].value))
+                        if (contextInfo.second) {
+                            ketoneSequences.add(contextInfo.first)
+                            val index = pending.indexOfFirst { it.sequence == contextInfo.first }
+                            if (index >= 0) pending[index] = pending[index].copy(type = "케톤", value = (pending[index].value.toDoubleOrNull()?.div(10.0)?.toString() ?: pending[index].value))
+                        }
                     }
                 }
             } else if (characteristic.uuid == RACP && bytes.size >= 2 && bytes[0].toInt() == 6) {
