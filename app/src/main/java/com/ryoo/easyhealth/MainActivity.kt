@@ -203,6 +203,7 @@ fun EasyHealthApp(context: Context) {
     var showDeviceInfo by remember { mutableStateOf(false) }
     var showBluetoothSearch by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
+    var activeBluetoothName by remember { mutableStateOf("블루투스 측정기") }
     var bluetoothCandidates by remember { mutableStateOf<List<MeterCandidate>>(emptyList()) }
     val bluetoothClient = remember { BluetoothGlucoseClient(context) }
     val bluetoothListener = remember(selectedPerson) {
@@ -210,6 +211,7 @@ fun EasyHealthApp(context: Context) {
             override fun onStatus(message: String) { bluetoothStatus = message }
             override fun onDevices(devices: List<MeterCandidate>) { bluetoothCandidates = devices }
             override fun onConnected(device: MeterCandidate) {
+                activeBluetoothName = device.name
                 val model = if (device.name.lowercase().contains("caresens")) "CareSens Dual" else "Contour Plus ONE"
                 if (!registeredDevices.contains(model)) registeredDevices.add(model)
                 prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString()).apply()
@@ -228,9 +230,8 @@ fun EasyHealthApp(context: Context) {
             }
             override fun onReadings(readings: List<MeterReading>) {
                 var imported = 0
-                val address = readings.firstOrNull()?.let { bluetoothCandidates.firstOrNull()?.address } ?: ""
                 readings.forEach { reading ->
-                    val deviceName = bluetoothCandidates.firstOrNull()?.name ?: "블루투스 측정기"
+                    val deviceName = activeBluetoothName
                     val externalId = "$deviceName:${reading.sequence}:${reading.timestamp}"
                     if (records.none { it.externalId == externalId }) {
                         records.add(VitalRecord(UUID.randomUUID().toString(), selectedPerson, reading.type,
