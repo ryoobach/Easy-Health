@@ -276,10 +276,14 @@ fun EasyHealthApp(context: Context) {
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
     var reportPeriod by remember { mutableStateOf(prefs.getString("last_report_period", "월간") ?: "월간") }
+    var selectedReportVital by remember { mutableStateOf(prefs.getString("last_report_vital", "혈당") ?: "혈당") }
+    var deviceHelpTarget by remember { mutableStateOf<String?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
     val personRecords = records.filter { it.person == selectedPerson }.sortedByDescending { it.timestamp }
     val activeTypes = devices.filter { enabledDevices.contains(it.first) && registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
     val reportRecords = personRecords.filter { activeTypes.contains(it.type) }
+    val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
+    if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
     val days = when (reportPeriod) { "월간" -> 30; "분기별" -> 90; "전체" -> 0; else -> 7 }
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp >= now - days * 86400000L }
@@ -311,7 +315,7 @@ fun EasyHealthApp(context: Context) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(28.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink)
+                        Text("Easy Health", fontWeight = FontWeight.Bold, color = Ink, fontSize = 16.sp, maxLines = 1, softWrap = false)
                     }
                 }, actions = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -507,10 +511,20 @@ fun EasyHealthApp(context: Context) {
                     Text("짧게 누르면 수정, 길게 누르면 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
 
                 }
-                "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0),
-                        containerColor = Color.Transparent, edgePadding = 0.dp) {
+                    val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
+                    if (reportVitalTypes.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            reportVitalTypes.forEach { vital ->
+                                FilterChip(selected = selectedReportVital == vital, onClick = {
+                                    selectedReportVital = vital
+                                    prefs.edit().putString("last_report_vital", vital).apply()
+                                }, label = { Text(vital, fontSize = 12.sp) })
+                            }
+                        }
+                    }
+                    ScrollableTabRow(selectedTabIndex = listOf("주간", "월간", "분기별", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
                         listOf("주간", "월간", "분기별", "전체").forEach { label ->
                             Tab(selected = reportPeriod == label, onClick = {
                                 reportPeriod = label
@@ -519,100 +533,46 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                     Text(if (reportPeriod == "전체") "전체 기록 기준" else "최근 ${days}일 기준", color = Color.Gray, fontSize = 12.sp)
-                    if (activeTypes.isEmpty()) {
+                    if (reportVitalTypes.isEmpty()) {
                         Text("기기 설정에서 리포트에 포함할 기기를 체크해 주세요.", color = Color.Gray)
                     } else {
-                        val glucoseRecords = periodRecords.filter { it.type == "혈당" }
-                        val glucoseNums = glucoseRecords.mapNotNull { it.value.toDoubleOrNull() }
-                        // 기록 탭과 동일한 공통 바이탈 순서: 혈당 → 당화혈색소 추정치 → 혈압 → 체온 → 체중 → 기타
+                        val selectedRows = periodRecords.filter { it.type == selectedReportVital }.sortedByDescending { it.timestamp }
+                        val numericValues = selectedRows.mapNotNull { it.value.toDoubleOrNull() }
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("혈당 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                                Text(averageGlucose?.let { "평균 ${it.toInt()} mg/dL" } ?: "혈당 기록 없음", color = Green, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-                                if (glucoseNums.isNotEmpty()) {
-                                    Text("최고 ${glucoseNums.maxOrNull()!!.toInt()} · 최저 ${glucoseNums.minOrNull()!!.toInt()} mg/dL · 총 ${glucoseNums.size}회", color = Ink, fontSize = 12.sp)
-                                }
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text("${selectedReportVital} 요약", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                if (selectedRows.isEmpty()) Text("선택한 기간에 기록이 없습니다.", color = Color.Gray)
+                                else if (selectedReportVital == "혈압") {
+                                    val bp = selectedRows.mapNotNull { row ->
+                                        val parts = row.value.split("/")
+                                        if (parts.size >= 3) parts.take(3).mapNotNull { it.toDoubleOrNull() }.takeIf { it.size == 3 } else null
+                                    }
+                                    if (bp.isNotEmpty()) {
+                                        Text("평균 ${bp.map { it[0] }.average().toInt()}/${bp.map { it[1] }.average().toInt()} mmHg", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                        Text("평균 맥박 ${bp.map { it[2] }.average().toInt()}회/분 · 총 ${selectedRows.size}회", color = Ink, fontSize = 12.sp)
+                                    } else Text("총 ${selectedRows.size}회 측정", color = Green, fontWeight = FontWeight.Bold)
+                                } else if (numericValues.isNotEmpty()) {
+                                    Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[selectedReportVital] ?: ""}", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                    Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${selectedRows.size}회", color = Ink, fontSize = 12.sp)
+                                } else Text("총 ${selectedRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                selectedRows.firstOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
                             }
                         }
-                        if (glucoseRecords.isNotEmpty()) {
-                            val dailyGlucose = glucoseRecords.groupBy { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) }.toSortedMap()
-                            val maxDaily = dailyGlucose.values.maxOfOrNull { rows -> rows.mapNotNull { it.value.toDoubleOrNull() }.average() }?.coerceAtLeast(1.0) ?: 1.0
+                        if (selectedRows.isNotEmpty()) {
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("일별 혈당 변화", color = Ink, fontWeight = FontWeight.SemiBold)
-                                    dailyGlucose.toList().takeLast(14).forEach { (day, rows) ->
-                                        val avg = rows.mapNotNull { it.value.toDoubleOrNull() }.average()
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text(day, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.width(42.dp))
-                                            Box(Modifier.weight(1f).height(10.dp).background(PaleGreen, RoundedCornerShape(6.dp))) {
-                                                Box(Modifier.fillMaxWidth((avg / maxDaily).toFloat().coerceIn(0.03f, 1f)).fillMaxHeight().background(Green, RoundedCornerShape(6.dp)))
-                                            }
-                                            Text(avg.toInt().toString(), color = Ink, fontSize = 11.sp)
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text("측정 기록", color = Ink, fontWeight = FontWeight.SemiBold)
+                                    selectedRows.take(100).forEach { row ->
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(dateFormat.format(Date(row.timestamp)), color = Color.Gray, fontSize = 10.sp, modifier = Modifier.weight(1.4f))
+                                            Text(row.value + (units[selectedReportVital]?.let { if (it.isBlank()) "" else " $it" } ?: ""), color = Green, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                         }
                                     }
                                 }
                             }
                         }
-                        // 당화혈색소 추정치는 혈당 바로 다음에 표시합니다.
-                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("당화혈색소 추정치", color = Ink, fontWeight = FontWeight.SemiBold)
-                                Text(estimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "기록 없음", color = Green, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                                Text("평균 혈당으로 계산한 참고용 추정치이며 검사실 당화혈색소 결과를 대신하지 않습니다.", color = Color.Gray, fontSize = 10.sp)
-                            }
-                        }
-                        // 혈압은 수축기·이완기·맥박을 하나의 묶음으로 표시합니다.
-                        val bpRecords = periodRecords.filter { it.type == "혈압" }
-                        if (activeTypes.contains("혈압")) {
-                            val parsedBp = bpRecords.mapNotNull { r ->
-                                val p = r.value.split("/")
-                                if (p.size >= 3) listOf(p[0].toDoubleOrNull(), p[1].toDoubleOrNull(), p[2].toDoubleOrNull()).takeIf { it.all { v -> v != null } }?.map { it!! } else null
-                            }
-                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Text("혈압 및 맥박", color = Ink, fontWeight = FontWeight.SemiBold)
-                                    if (parsedBp.isEmpty()) Text("기록 없음", color = Color.Gray)
-                                    else Text("평균 ${parsedBp.map { it[0] }.average().toInt()}/${parsedBp.map { it[1] }.average().toInt()} mmHg · 맥박 ${parsedBp.map { it[2] }.average().toInt()}회/분", color = Green, fontWeight = FontWeight.Bold)
-                                    Text("측정 ${bpRecords.size}회", color = Color.Gray, fontSize = 11.sp)
-                                }
-                            }
-                        }
-                        // 나머지 바이탈도 기록 탭의 공통 순서를 기준으로 정렬합니다.
-                        val reportVitalOrder = listOf("체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤")
-                        activeTypes.filter { it !in listOf("혈당", "혈압", "식사", "운동", "수면", "특이사항", "맥박") }
-                            .distinct()
-                            .sortedWith(compareBy<String> { reportVitalOrder.indexOf(it).let { index -> if (index < 0) Int.MAX_VALUE else index } }.thenBy { it })
-                            .forEach { type ->
-                                val rows = periodRecords.filter { it.type == type }
-                                val values = rows.mapNotNull { it.value.toDoubleOrNull() }
-                                val unit = units[type] ?: ""
-                                Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Text(type, color = Ink, fontWeight = FontWeight.SemiBold)
-                                        if (rows.isEmpty()) Text("기록 없음", color = Color.Gray)
-                                        else if (values.isNotEmpty()) {
-                                            Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} ${unit} · 최고 ${values.maxOrNull()} · 최저 ${values.minOrNull()}", color = Green, fontWeight = FontWeight.Medium)
-                                            Text("총 ${rows.size}회 · 최근 ${rows.first().value} ${unit}", color = Color.Gray, fontSize = 11.sp)
-                                        } else {
-                                            Text("총 ${rows.size}건 · 최근 기록: ${rows.first().value}", color = Green, fontSize = 12.sp)
-                                        }
-                                        rows.firstOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 10.sp) }
-                                    }
-                                }
-                            }
-                        listOf("식사", "운동", "수면", "특이사항").filter { activeTypes.contains(it) }.forEach { type ->
-                            val rows = periodRecords.filter { it.type == type }
-                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(type + " 기록", color = Ink, fontWeight = FontWeight.SemiBold)
-                                    Text("${rows.size}건", color = Green, fontWeight = FontWeight.Bold)
-                                    rows.take(5).forEach { Text("• ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp))}  ${it.value}", color = Color.Gray, fontSize = 11.sp) }
-                                    if (rows.isEmpty()) Text("기록 없음", color = Color.Gray, fontSize = 11.sp)
-                                }
-                            }
-                        }
-                        Text("선택한 측정 기기와 대상자의 기록을 하나로 모아 분석합니다. 모든 값은 실제 입력·수신된 기록만 사용합니다.", color = Color.Gray, fontSize = 11.sp)
                     }
+                    Text("선택한 바이탈과 기간에 해당하는 실제 측정 기록만 표시합니다. 같은 항목을 측정하는 기기는 통합해 분석합니다.", color = Color.Gray, fontSize = 11.sp)
                     OutlinedButton(onClick = { tab = "기기 설정" }, modifier = Modifier.fillMaxWidth()) { Text("리포트에 포함할 기기 설정") }
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -639,19 +599,33 @@ fun EasyHealthApp(context: Context) {
                                     Column {
                                         Text(device.first, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(device.second.joinToString(" · "), color = Color.Gray, fontSize = 12.sp)
+                                        TextButton(onClick = { deviceHelpTarget = device.first }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
+                                            Text("연결 방법 보기", color = Green, fontSize = 11.sp)
+                                        }
                                     }
                                 }
                             }
                         }
                         Text("짧게 누르면 리포트 포함 여부를 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
-                    Text("실제 블루투스 연결과 자동 수집은 기기별 호환성 확인 후 지원됩니다.", color = Color.Gray, fontSize = 12.sp)
+                    Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                 }
             }
         }
     }
 
 
+    if (deviceHelpTarget != null) {
+        val helpName = deviceHelpTarget!!
+        val helpText = when (helpName) {
+            "Contour Plus ONE" -> "1. 측정기 전원을 끕니다.\\n2. OK 버튼을 길게 눌러 블루투스 표시가 깜박이도록 합니다.\\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\\n4. 검색된 Contour Plus ONE을 선택해 연결합니다."
+            "CareSens Dual" -> "1. 측정기에서 S 버튼을 약 3초 누릅니다.\\n2. YES → BT → PAIR 순서로 선택합니다.\\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\\n4. 검색된 CareSens 기기를 선택하고 측정기 화면의 PIN 안내에 따라 연결합니다."
+            else -> "1. 측정기를 켜고 블루투스 페어링 모드로 설정합니다.\\n2. 휴대폰 설정의 블루투스에서 기기를 검색해 등록합니다.\\n3. Easy Health의 기기 등록에서 해당 측정 항목을 활성화합니다.\\n4. 자동 가져오기는 기기별 데이터 전송 방식이 지원되는 경우에 사용할 수 있습니다."
+        }
+        AlertDialog(onDismissRequest = { deviceHelpTarget = null }, title = { Text("$helpName 연결 방법") },
+            text = { Text(helpText, color = Ink, fontSize = 13.sp, lineHeight = 20.sp) },
+            confirmButton = { TextButton(onClick = { deviceHelpTarget = null }) { Text("확인") } })
+    }
     if (showRegisterDeviceDialog) {
         AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 등록") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
