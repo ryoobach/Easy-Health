@@ -826,6 +826,49 @@ fun EasyHealthApp(context: Context) {
                                             Text("평균 ${bp.map { it[0] }.average().toInt()}/${bp.map { it[1] }.average().toInt()} mmHg", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                             Text("평균 맥박 ${bp.map { it[2] }.average().toInt()}회/분 · 총 ${vitalRows.size}회", color = Ink, fontSize = 12.sp)
                                         } else Text("총 ${vitalRows.size}회 측정", color = Green, fontWeight = FontWeight.Bold)
+                                    } else if (vital == "혈당" && numericValues.isNotEmpty()) {
+                                        val overallAverage = numericValues.average()
+                                        Text("전체 평균 ${String.format(Locale.KOREA, "%.1f", overallAverage)} mg/dL", color = riskFor(vital, overallAverage.toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                        Text("기간별 평균 · 같은 시간대의 연속 측정은 한 번으로 묶어 계산", color = Ink, fontSize = 11.sp)
+                                        val glucoseChunkRanges = mutableListOf<Pair<Long, Long>>()
+                                        if (reportPeriod == "1개월") {
+                                            for (index in 0 until 4) {
+                                                val end = now - index * 7L * 86400000L
+                                                glucoseChunkRanges.add((end - 7L * 86400000L) to end)
+                                            }
+                                        } else if (reportPeriod == "3개월") {
+                                            val endCalendar = Calendar.getInstance().apply { timeInMillis = now }
+                                            for (index in 0 until 3) {
+                                                val end = endCalendar.timeInMillis
+                                                val startCalendar = (endCalendar.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
+                                                glucoseChunkRanges.add(startCalendar.timeInMillis to end)
+                                                endCalendar.add(Calendar.MONTH, -1)
+                                            }
+                                        } else if (reportPeriod == "전체") {
+                                            val firstTimestamp = vitalRows.minOf { it.timestamp }
+                                            val endCalendar = Calendar.getInstance().apply { timeInMillis = now }
+                                            while (true) {
+                                                val end = endCalendar.timeInMillis
+                                                val startCalendar = (endCalendar.clone() as Calendar).apply { add(Calendar.MONTH, -3) }
+                                                val start = startCalendar.timeInMillis
+                                                glucoseChunkRanges.add(start to end)
+                                                if (start <= firstTimestamp) break
+                                                endCalendar.add(Calendar.MONTH, -3)
+                                            }
+                                        }
+                                        if (glucoseChunkRanges.isNotEmpty()) {
+                                            glucoseChunkRanges.asReversed().forEach { (rangeStart, rangeEnd) ->
+                                                val chunkGroups = glucoseMeasurementGroups(vitalRows.filter { it.timestamp >= rangeStart && it.timestamp < rangeEnd })
+                                                val chunkValues = chunkGroups.map { it.average }
+                                                val startLabel = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(rangeStart))
+                                                val endLabel = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(rangeEnd))
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("$startLabel ~ $endLabel", color = Ink, fontSize = 12.sp)
+                                                    Text(if (chunkValues.isNotEmpty()) "평균 ${String.format(Locale.KOREA, "%.1f", chunkValues.average())} mg/dL · ${chunkGroups.size}회" else "기록 없음", color = if (chunkValues.isNotEmpty()) Green else Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                                }
+                                            }
+                                        }
+                                        Text("최고 ${numericValues.maxOrNull()?.toInt()} · 최저 ${numericValues.minOrNull()?.toInt()} · 총 ${summaryCount}회", color = Ink, fontSize = 12.sp)
                                     } else if (numericValues.isNotEmpty()) {
                                         Text("평균 ${String.format(Locale.KOREA, "%.1f", numericValues.average())} ${units[vital] ?: ""}", color = riskFor(vital, numericValues.average().toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                         Text("평균 기준: ${riskFor(vital, numericValues.average().toString(), selectedProfile).label}", color = riskFor(vital, numericValues.average().toString(), selectedProfile).color, fontSize = 11.sp)
@@ -834,50 +877,6 @@ fun EasyHealthApp(context: Context) {
                                         Text("총 ${vitalRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                     }
                                     vitalRows.lastOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
-                                }
-                            }
-                            if (vital == "혈당" && reportPeriod == "전체" && vitalRows.isNotEmpty()) {
-                                val firstGlucose = vitalRows.minOf { it.timestamp }
-                                val lastGlucose = vitalRows.maxOf { it.timestamp }
-                                val chunkRanges = mutableListOf<Pair<Long, Long>>()
-                                var chunkStart = java.util.Calendar.getInstance().apply {
-                                    timeInMillis = firstGlucose
-                                    set(java.util.Calendar.DAY_OF_MONTH, 1)
-                                    set(java.util.Calendar.HOUR_OF_DAY, 0)
-                                    set(java.util.Calendar.MINUTE, 0)
-                                    set(java.util.Calendar.SECOND, 0)
-                                    set(java.util.Calendar.MILLISECOND, 0)
-                                }
-                                while (chunkStart.timeInMillis <= lastGlucose) {
-                                    val startMillis = chunkStart.timeInMillis
-                                    val endCalendar = (chunkStart.clone() as java.util.Calendar).apply { add(java.util.Calendar.MONTH, 3) }
-                                    chunkRanges.add(startMillis to endCalendar.timeInMillis)
-                                    chunkStart = endCalendar
-                                }
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("전체 혈당 기록 · 3개월 단위 / 측정 기기별", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                    chunkRanges.asReversed().forEach { (rangeStart, rangeEnd) ->
-                                        val rangeRows = vitalRows.filter { it.timestamp >= rangeStart && it.timestamp < rangeEnd }
-                                        if (rangeRows.isNotEmpty()) {
-                                            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
-                                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                    val startLabel = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(rangeStart))
-                                                    val endLabel = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(rangeEnd - 1))
-                                                    Text("$startLabel ~ $endLabel", color = Ink, fontWeight = FontWeight.Bold)
-                                                    rangeRows.groupBy { it.source.ifBlank { "기기 미지정" } }.toSortedMap().forEach { (sourceName, deviceRows) ->
-                                                        val groups = glucoseMeasurementGroups(deviceRows)
-                                                        val values = groups.map { it.average }
-                                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                            Text(sourceName, color = Green, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                                            if (values.isNotEmpty()) {
-                                                                Text("평균 ${String.format(Locale.KOREA, "%.1f", values.average())} mg/dL · 최고 ${values.maxOrNull()?.toInt()} · 최저 ${values.minOrNull()?.toInt()} · ${groups.size}회", color = Ink, fontSize = 11.sp)
-                                                            } else Text("${deviceRows.size}회 측정", color = Ink, fontSize = 11.sp)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
