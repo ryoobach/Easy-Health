@@ -636,25 +636,60 @@ fun EasyHealthApp(context: Context) {
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text("${selectedReportVital} 측정 추이 · 최근 ${chartValues.size}회", color = Ink, fontWeight = FontWeight.SemiBold)
-                                    Canvas(Modifier.fillMaxWidth().height(130.dp)) {
-                                        val vals = chartValues.map { it.second }
-                                        val minV = (vals.minOrNull() ?: 0.0)
-                                        val maxV = (vals.maxOrNull() ?: 1.0)
-                                        val span = (maxV - minV).takeIf { it > 0.0 } ?: 1.0
-                                        val pts = chartValues.mapIndexed { index, pair ->
-                                            Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1), size.height - ((pair.second - minV) / span * (size.height - 18.dp.toPx())).toFloat() - 9.dp.toPx())
+                                    if (selectedReportVital == "혈당") {
+                                        Text("Y축 · 혈당 (mg/dL)", color = Color.Gray, fontSize = 10.sp)
+                                        Row(Modifier.fillMaxWidth().height(160.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                                                listOf("300", "250", "200", "150", "100", "50").forEach { tick ->
+                                                    Text(tick, color = Color.Gray, fontSize = 10.sp)
+                                                }
+                                            }
+                                            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                                                val minV = 50.0
+                                                val maxV = 300.0
+                                                fun yFor(value: Double) = size.height - ((value - minV) / (maxV - minV) * size.height).toFloat()
+                                                listOf(50.0, 100.0, 150.0, 200.0, 250.0, 300.0).forEach { tick ->
+                                                    drawLine(Color.LightGray.copy(alpha = 0.7f), Offset(0f, yFor(tick)), Offset(size.width, yFor(tick)), strokeWidth = 1.dp.toPx())
+                                                }
+                                                // 일반적인 저혈당 주의선(70)과 식후 목표 참고선(180)
+                                                drawLine(Color(0xFFE09A24), Offset(0f, yFor(70.0)), Offset(size.width, yFor(70.0)), strokeWidth = 1.5.dp.toPx())
+                                                drawLine(Color(0xFF269B62), Offset(0f, yFor(180.0)), Offset(size.width, yFor(180.0)), strokeWidth = 1.5.dp.toPx())
+                                                val pts = chartValues.mapIndexed { index, pair ->
+                                                    Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1),
+                                                        yFor(pair.second.coerceIn(minV, maxV)))
+                                                }
+                                                for (i in 0 until pts.lastIndex) {
+                                                    val c = riskFor(selectedReportVital, chartValues[i + 1].first.value, selectedProfile).color
+                                                    drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
+                                                }
+                                                pts.forEachIndexed { index, point ->
+                                                    drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point)
+                                                }
+                                            }
                                         }
-                                        for (i in 0 until pts.lastIndex) {
-                                            val c = riskFor(selectedReportVital, chartValues[i + 1].first.value, selectedProfile).color
-                                            drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
-                                        }
-                                        pts.forEachIndexed { index, point ->
-                                            drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point)
+                                        Text("참고선: 70 미만 저혈당 주의 · 180은 식후 1~2시간 혈당 목표 참고선", color = Color.Gray, fontSize = 10.sp)
+                                        Text("공복 혈당 목표는 일반적으로 80~130 mg/dL이며, 개인별 목표와 측정 시점에 따라 해석이 달라집니다.", color = Color.Gray, fontSize = 10.sp)
+                                    } else {
+                                        Canvas(Modifier.fillMaxWidth().height(130.dp)) {
+                                            val vals = chartValues.map { it.second }
+                                            val minV = (vals.minOrNull() ?: 0.0)
+                                            val maxV = (vals.maxOrNull() ?: 1.0)
+                                            val span = (maxV - minV).takeIf { it > 0.0 } ?: 1.0
+                                            val pts = chartValues.mapIndexed { index, pair ->
+                                                Offset(if (chartValues.size == 1) size.width / 2 else index * size.width / (chartValues.size - 1), size.height - ((pair.second - minV) / span * (size.height - 18.dp.toPx())).toFloat() - 9.dp.toPx())
+                                            }
+                                            for (i in 0 until pts.lastIndex) {
+                                                val c = riskFor(selectedReportVital, chartValues[i + 1].first.value, selectedProfile).color
+                                                drawLine(c, pts[i], pts[i + 1], strokeWidth = 3.dp.toPx())
+                                            }
+                                            pts.forEachIndexed { index, point ->
+                                                drawCircle(riskFor(selectedReportVital, chartValues[index].first.value, selectedProfile).color, radius = 5.dp.toPx(), center = point)
+                                            }
                                         }
                                     }
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(chartValues.firstOrNull()?.first?.let { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
-                                        Text(chartValues.lastOrNull()?.first?.let { SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
+                                        Text(chartValues.firstOrNull()?.first?.let { SimpleDateFormat("MM.dd HH:mm", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
+                                        Text(chartValues.lastOrNull()?.first?.let { SimpleDateFormat("MM.dd HH:mm", Locale.KOREA).format(Date(it.timestamp)) } ?: "", color = Color.Gray, fontSize = 10.sp)
                                     }
                                     Text("초록: 참고 범위 · 노랑/주황: 주의 · 빨강: 위험 신호 · 파랑: 개인별 참고", color = Color.Gray, fontSize = 10.sp)
                                     Text("색상은 일반적인 참고 기준이며 진단이 아닙니다. 혈당은 공복·식후 여부, 혈압은 측정 조건 등에 따라 해석이 달라질 수 있습니다.", color = Color.Gray, fontSize = 10.sp)
