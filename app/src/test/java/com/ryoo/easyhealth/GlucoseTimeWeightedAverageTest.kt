@@ -69,6 +69,17 @@ class GlucoseTimeWeightedAverageTest {
         assertEquals(3, result.measurementCount)
     }
 
+    @Test fun intervalsContinueAcrossMidnight() {
+        val beforeMidnight = 23L * hour
+        val result = estimate(listOf(
+            reading("100", beforeMidnight),
+            reading("200", beforeMidnight + 2 * hour)
+        ))
+        assertNotNull(result)
+        assertEquals(100.0, result!!.averageMgDl, 0.0001)
+        assertEquals(2 * hour, result.coveredMillis)
+    }
+
     @Test fun insufficientCoverageDoesNotProduceEstimate() {
         val result = calculateTimeWeightedGlucoseEstimate(
             listOf(reading("100", 0), reading("120", hour)),
@@ -78,10 +89,10 @@ class GlucoseTimeWeightedAverageTest {
     }
 
     @Test fun eAgAndHbA1cConversionCanBeReversed() {
-        val result = estimate(listOf(reading("154.4", 0), reading("154.4", hour)))
+        val result = estimate(listOf(reading("154.2", 0), reading("154.2", hour)))
         assertNotNull(result)
         val eAgBack = result!!.estimatedA1cPercent * 28.7 - 46.7
-        assertEquals(154.4, eAgBack, 0.0001)
+        assertEquals(154.2, eAgBack, 0.0001)
         assertEquals(7.0, result.estimatedA1cPercent, 0.001)
     }
 
