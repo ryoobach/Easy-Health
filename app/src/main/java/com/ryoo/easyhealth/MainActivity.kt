@@ -393,6 +393,8 @@ fun EasyHealthApp(context: Context) {
     var transferTo by remember { mutableStateOf(System.currentTimeMillis()) }
     var showTransferPersonMenu by remember { mutableStateOf(false) }
     var showBluetoothSearch by remember { mutableStateOf(false) }
+    var transferSearching by remember { mutableStateOf(false) }
+    var transferServerActive by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
     var activeBluetoothName by remember { mutableStateOf("블루투스 측정기") }
     var bluetoothCandidates by remember { mutableStateOf<List<MeterCandidate>>(emptyList()) }
@@ -452,15 +454,30 @@ fun EasyHealthApp(context: Context) {
     val transferListener = remember {
         object : BluetoothRecordTransfer.Listener {
             private fun onUi(action: () -> Unit) { android.os.Handler(android.os.Looper.getMainLooper()).post(action) }
-            override fun onStatus(message: String) { onUi { transferStatus = message } }
+            override fun onStatus(message: String) {
+                onUi {
+                    transferStatus = message
+                    if (message.contains("검색이 끝났습니다") || message.contains("검색을 취소") ||
+                        message.contains("검색을 시작하지 못") || message.contains("검색에 실패")) transferSearching = false
+                    if (message.contains("수신 대기 중")) transferServerActive = true
+                    if (message.contains("전송이 완료") || message.contains("실패") || message.contains("오류") ||
+                        message.contains("수신 대기를 취소")) transferServerActive = false
+                }
+            }
             override fun onPeers(peers: List<TransferPeer>) { onUi { transferPeers = peers } }
-            override fun onIncoming(offer: TransferOffer) { onUi { transferOffer = offer } }
-            override fun onProgress(done: Int, total: Int) { onUi { transferProgress = if (total > 0) done.toFloat() / total else 0f; transferStatus = "전송 중 " + (transferProgress * 100).toInt() + "%" } }
+            override fun onIncoming(offer: TransferOffer) { onUi { transferServerActive = false; transferOffer = offer } }
+            override fun onProgress(done: Int, total: Int) {
+                onUi {
+                    transferProgress = if (total > 0) done.toFloat() / total else 0f
+                    transferStatus = "전송 중 " + (transferProgress * 100).toInt() + "%"
+                }
+            }
             override fun onReceived(json: String, offer: TransferOffer) {
                 onUi {
                     try {
                         val array = JSONArray(json)
                         var imported = 0
+                        var duplicates = 0
                         if (!people.contains(offer.person)) {
                             people.add(offer.person)
                             personProfiles[offer.person] = PersonProfile(offer.person)
@@ -473,41 +490,70 @@ fun EasyHealthApp(context: Context) {
                             val item = VitalRecord(o.optString("id", UUID.randomUUID().toString()), person,
                                 o.optString("type", ""), o.optString("value", ""), o.optLong("timestamp"),
                                 o.optString("source", "블루투스 전송"), o.optString("note", ""), o.optString("externalId", ""))
-                            if (item.type.isNotBlank() && item.value.isNotBlank() &&
-                                records.none { it.id == item.id || (it.person == item.person && it.type == item.type && it.timestamp == item.timestamp && it.value == item.value) }) {
-                                records.add(item); imported++
+                            if (item.type.isNotBlank() && item.value.isNotBlank()) {
+                                if (records.none { it.id == item.id || (it.person == item.person && it.type == item.type && it.timestamp == item.timestamp && it.value == item.value) }) {
+                                    records.add(item); imported++
+                                } else duplicates++
                             }
                         }
                         persistRecords(context, records)
-                        transferStatus = "가져오기 완료: 새 기록 " + imported + "건"
+                        transferStatus = "가져오기 완료: 새 기록 " + imported + "건 · 중복 제외 " + duplicates + "건"
+                        transferProgress = 1f
                         transferOffer = null
-                    } catch (e: Exception) { transferStatus = "가져온 데이터 처리 실패: " + (e.localizedMessage ?: "형식 오류") }
+                    } catch (e: Exception) {
+                        transferStatus = "가져온 데이터 처리 실패: " + (e.localizedMessage ?: "형식 오류")
+                    }
                 }
             }
-            override fun onError(message: String) { onUi { transferStatus = message } }
+            override fun onError(message: String) {
+                onUi { transferStatus = message; transferSearching = false; transferServerActive = false }
+            }
+        }
+    }
+    val discoverabilityLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
+            transferStatus = "기기 검색 허용을 확인했습니다. 수신 서버를 시작합니다."
+            recordTransfer.startServer(transferListener)
+        } else {
+            transferServerActive = false
+            transferStatus = "블루투스 검색 허용이 취소되어 수신 대기를 시작하지 않았습니다."
+        }
+    }
+    fun startTransferAction() {
+        if (transferMode == "보내기") {
+            transferTarget = null
+            transferPeers = emptyList()
+            transferSearching = true
+            showBluetoothSearch = true
+            transferStatus = "주변 블루투스 기기를 검색하고 있습니다."
+            recordTransfer.startDiscovery(transferListener)
+        } else {
+            transferServerActive = false
+            transferStatus = "다른 기기에서 이 태블릿을 검색할 수 있도록 허용해 주세요."
+            val request = Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                .putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+            discoverabilityLauncher.launch(request)
         }
     }
     val transferPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        if (grants.values.all { it }) {
-            if (transferMode == "보내기") recordTransfer.startDiscovery(transferListener)
-            else {
-                context.startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300))
-                recordTransfer.startServer(transferListener)
-            }
-        } else transferStatus = "블루투스 검색·연결 권한을 허용해 주세요."
+        if (grants.values.all { it }) startTransferAction()
+        else {
+            transferSearching = false
+            transferServerActive = false
+            transferStatus = "블루투스 작업에 필요한 권한이 거부되었습니다. 앱 권한 설정에서 허용해 주세요."
+        }
     }
     fun requestTransferPermissions() {
-        val required = if (android.os.Build.VERSION.SDK_INT >= 31)
-            arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_ADVERTISE)
-        else arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        val required = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            if (transferMode == "보내기")
+                arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
+            else arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_ADVERTISE)
+        } else {
+            if (transferMode == "보내기") arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION) else emptyArray()
+        }
         val missing = required.filter { context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
-        if (missing.isEmpty()) {
-            if (transferMode == "보내기") recordTransfer.startDiscovery(transferListener)
-            else {
-                context.startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300))
-                recordTransfer.startServer(transferListener)
-            }
-        } else transferPermissionLauncher.launch(missing.toTypedArray())
+        if (missing.isEmpty()) startTransferAction()
+        else transferPermissionLauncher.launch(missing.toTypedArray())
     }
     DisposableEffect(Unit) { onDispose { bluetoothClient.close(); recordTransfer.close() } }
     var showAppInfo by remember { mutableStateOf(false) }
@@ -1265,7 +1311,14 @@ fun EasyHealthApp(context: Context) {
     }
     if (showTransferDialog) {
         AlertDialog(
-            onDismissRequest = { showTransferDialog = false },
+            onDismissRequest = {
+                if (transferSearching) recordTransfer.cancelDiscovery()
+                if (transferServerActive) recordTransfer.stopServer()
+                transferSearching = false
+                transferServerActive = false
+                showBluetoothSearch = false
+                showTransferDialog = false
+            },
             title = { Text("기기 간 블루투스 전송") },
             text = {
                 Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1288,12 +1341,12 @@ fun EasyHealthApp(context: Context) {
                                 DatePickerDialog(context, { _, y, m, d -> transferTo = Calendar.getInstance().apply { set(y, m, d, 23, 59, 59) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
                             }) { Text("종료 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferTo))) }
                         }
-                        Text("주변 기기")
-                        transferPeers.forEach { peer ->
-                            TextButton(onClick = { transferTarget = peer }) { Text((if (transferTarget?.address == peer.address) "✓ " else "") + peer.name + " · " + peer.address) }
-                        }
-                        if (transferPeers.isEmpty()) Text("받는 기기에서 먼저 수신 대기를 시작한 후 검색해 주세요.", color = Color.Gray, fontSize = 11.sp)
-                    } else Text("수신 대기를 시작하면 상대 기기의 전송 요청을 앱에서 승인할 수 있습니다.")
+                        Text("선택된 기기: " + (transferTarget?.name ?: "아직 선택하지 않았습니다."), color = if (transferTarget == null) Color.Gray else Green, fontSize = 12.sp)
+                    } else {
+                        Text(if (transferServerActive)
+                            "수신 대기 중입니다. 다른 기기의 Easy Health에서 이 태블릿을 검색해 주세요."
+                            else "수신 대기를 시작하면 다른 기기에서 이 태블릿을 검색할 수 있습니다.")
+                    }
                     if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
                 }
             },
@@ -1311,7 +1364,12 @@ fun EasyHealthApp(context: Context) {
                             }
                         }) { Text("보내기") }
                     }
-                } else TextButton(onClick = { requestTransferPermissions() }) { Text("수신 대기 시작") }
+                } else TextButton(onClick = {
+                    if (transferServerActive) {
+                        recordTransfer.stopServer()
+                        transferServerActive = false
+                    } else requestTransferPermissions()
+                }) { Text(if (transferServerActive) "수신 대기 취소" else "수신 대기 시작") }
             },
             dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text("닫기") } }
         )
@@ -1325,56 +1383,64 @@ fun EasyHealthApp(context: Context) {
             dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } }
         )
     }
-    if (showTransferDialog) {
-        AlertDialog(onDismissRequest = { showTransferDialog = false }, title = { Text("블루투스 데이터 전송") },
+    if (showBluetoothSearch) {
+        AlertDialog(
+            onDismissRequest = {
+                if (transferSearching) recordTransfer.cancelDiscovery()
+                transferSearching = false
+                showBluetoothSearch = false
+            },
+            title = { Text("블루투스 기기 검색") },
             text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 450.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row {
-                        FilterChip(selected = transferMode == "보내기", onClick = { transferMode = "보내기" }, label = { Text("보내기") })
-                        FilterChip(selected = transferMode == "받기", onClick = { transferMode = "받기" }, label = { Text("받기") })
-                    }
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text(transferStatus, color = Green, fontSize = 12.sp)
-                    if (transferMode == "보내기") {
-                        Text("사용자: " + transferPerson)
-                        people.forEach { p -> TextButton(onClick = { transferPerson = p }) { Text(p) } }
-                        Row {
-                            TextButton(onClick = {
-                                val c = Calendar.getInstance().apply { timeInMillis = transferFrom }
-                                DatePickerDialog(context, { _, y, m, d -> transferFrom = Calendar.getInstance().apply { set(y, m, d, 0, 0, 0) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
-                            }) { Text("시작 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferFrom))) }
-                            TextButton(onClick = {
-                                val c = Calendar.getInstance().apply { timeInMillis = transferTo }
-                                DatePickerDialog(context, { _, y, m, d -> transferTo = Calendar.getInstance().apply { set(y, m, d, 23, 59, 59) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
-                            }) { Text("종료 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferTo))) }
+                    if (transferSearching) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    if (transferPeers.isEmpty()) {
+                        Text(
+                            if (transferSearching) "주변 기기를 찾고 있습니다. 받는 기기의 수신 대기를 켜 주세요."
+                            else "검색된 기기가 없습니다. 받는 기기의 블루투스와 수신 대기 상태를 확인한 뒤 다시 검색해 주세요.",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        transferPeers.forEach { peer ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    transferTarget = peer
+                                    transferSearching = false
+                                    recordTransfer.cancelDiscovery()
+                                    showBluetoothSearch = false
+                                    transferStatus = peer.name + " 기기를 선택했습니다. 보내기 버튼을 눌러 전송해 주세요."
+                                }
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(peer.name, color = Ink, fontWeight = FontWeight.SemiBold)
+                                    Text(peer.address, color = Color.Gray, fontSize = 11.sp)
+                                }
+                            }
                         }
-                        transferPeers.forEach { peer -> TextButton(onClick = { transferTarget = peer }) { Text((if (transferTarget?.address == peer.address) "✓ " else "") + peer.name + " " + peer.address) } }
-                        if (transferPeers.isEmpty()) Text("받는 기기에서 먼저 수신 대기를 시작한 뒤 주변 기기를 검색해 주세요.", color = Color.Gray, fontSize = 11.sp)
-                    } else Text("수신 대기를 시작하면 상대 기기의 전송 요청을 이 화면에서 승인할 수 있습니다.")
-                    if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             },
             confirmButton = {
-                if (transferMode == "보내기") Row {
-                    TextButton(onClick = { requestTransferPermissions() }) { Text("기기 검색") }
-                    TextButton(onClick = {
-                        val selected = records.filter { it.person == transferPerson && it.timestamp in transferFrom..transferTo }
-                        when {
-                            transferFrom > transferTo -> transferStatus = "전송 날짜 범위를 확인해 주세요."
-                            transferTarget == null -> transferStatus = "받는 기기를 선택해 주세요."
-                            selected.isEmpty() -> transferStatus = "선택 기간에 기록이 없습니다."
-                            else -> { transferProgress = 0f; recordTransfer.send(transferTarget!!, transferPerson, transferFrom, transferTo, encodeRecords(selected), selected.size) }
-                        }
-                    }) { Text("보내기") }
-                } else TextButton(onClick = { requestTransferPermissions() }) { Text("수신 대기 시작") }
+                TextButton(onClick = {
+                    transferPeers = emptyList()
+                    transferSearching = true
+                    transferStatus = "주변 블루투스 기기를 다시 검색하고 있습니다."
+                    recordTransfer.startDiscovery(transferListener)
+                }) { Text("다시 검색") }
             },
-            dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text("닫기") } })
-    }
-    transferOffer?.let { offer ->
-        AlertDialog(onDismissRequest = { transferOffer = null; recordTransfer.rejectIncoming() },
-            title = { Text("데이터 수신 승인") },
-            text = { Text(offer.peerName + " 기기에서 " + offer.person + " 사용자 기록 " + offer.count + "건을 보내려고 합니다. 받으시겠습니까?") },
-            confirmButton = { TextButton(onClick = { transferOffer = null; recordTransfer.acceptIncoming(offer) }) { Text("승인") } },
-            dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } })
+            dismissButton = {
+                TextButton(onClick = {
+                    if (transferSearching) recordTransfer.cancelDiscovery()
+                    transferSearching = false
+                    showBluetoothSearch = false
+                }) { Text("취소") }
+            }
+        )
     }
     if (showDeviceInfo) {
         val savedMeters = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
