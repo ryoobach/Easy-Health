@@ -80,6 +80,7 @@ class BluetoothRecordTransfer(private val context: Context) {
         }
     }
 
+    @Suppress("DEPRECATION")
     fun startDiscovery(listener: Listener) {
         this.listener = listener
         try {
@@ -92,7 +93,7 @@ class BluetoothRecordTransfer(private val context: Context) {
                     addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
                 }
                 if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-                else @Suppress("DEPRECATION") context.registerReceiver(discoveryReceiver, filter)
+                else context.registerReceiver(discoveryReceiver, filter)
                 receiverRegistered = true
             }
             synchronized(peers) { peers.clear() }
