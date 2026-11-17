@@ -115,11 +115,10 @@ private fun mealPeriodFor(timestamp: Long, profile: PersonProfile): MealPeriod? 
         val min = parts.getOrNull(1)?.toIntOrNull() ?: return null
         return if (hour in 0..23 && min in 0..59) hour * 60 + min else null
     }
-    fun inWindow(start: Int, end: Int): Boolean =
-        if (start <= end) minute >= start && minute < end else minute >= start || minute < end
-    fun before(time: Int, minutes: Int) = (time - minutes + 1440) % 1440
-    fun after(time: Int, minutes: Int) = (time + minutes) % 1440
-
+    fun circularDistance(a: Int, b: Int): Int {
+        val d = kotlin.math.abs(a - b)
+        return minOf(d, 1440 - d)
+    }
     val wake = parse(profile.wakeTime)
     val breakfast = parse(profile.breakfastTime)
     val lunch = parse(profile.lunchTime)
@@ -130,23 +129,28 @@ private fun mealPeriodFor(timestamp: Long, profile: PersonProfile): MealPeriod? 
         Triple("점심", lunch, Pair(Color(0xFF80CBC4), Color(0xFF00695C))),
         Triple("저녁", dinner, Pair(Color(0xFFFFCC80), Color(0xFFE65100)))
     ).filter { it.second != null }
-    meals.forEach { (name, time, colors) ->
-        if (time != null && inWindow(before(time, 30), time))
-            return MealPeriod("${name}식전", colors.first)
+
+    // 기상 후 아침 식사 전은 별도의 공복 구간으로 유지합니다.
+    if (wake != null && breakfast != null) {
+        val isFasting = if (wake <= breakfast) minute >= wake && minute < breakfast
+            else minute >= wake || minute < breakfast
+        if (isFasting) return MealPeriod("공복", Color(0xFF3949AB))
     }
-    if (wake != null && breakfast != null && inWindow(wake, before(breakfast, 30)))
-        return MealPeriod("공복", Color(0xFF3949AB))
-    // 식후 표시는 2시간으로 끊지 않고 다음 식사 예정 시각까지 유지합니다.
-    if (meals.isNotEmpty()) {
-        val ordered = meals.map { it.first to it.second!! }.sortedBy { it.second }
-        val previous = ordered.lastOrNull { it.second <= minute } ?: ordered.last()
-        return MealPeriod("${previous.first}식후", meals.first { it.first == previous.first }.third.second)
-    }
-    if (bed != null && inWindow(before(bed, 60), bed))
+
+    // 취침 기준시간 전후 1시간은 모두 취침전으로 표시합니다.
+    if (bed != null && circularDistance(minute, bed) <= 60)
         return MealPeriod("취침전", Color(0xFF8E44AD))
+
+    // 가장 가까운 식사 기준시간을 찾아 기준시간 이전은 식전, 이후는 식후로 표시합니다.
+    val nearestMeal = meals.minByOrNull { circularDistance(minute, it.second!!) }
+    if (nearestMeal != null) {
+        val mealTime = nearestMeal.second!!
+        val isBefore = ((mealTime - minute + 1440) % 1440) < 720
+        val label = if (isBefore) "${nearestMeal.first}식전" else "${nearestMeal.first}식후"
+        return MealPeriod(label, if (isBefore) nearestMeal.third.first else nearestMeal.third.second)
+    }
     return null
 }
-
 private data class GlucoseMeasurementGroup(val source: String, val timestamp: Long, val average: Double, val values: List<Double>)
 
 // 같은 기기에서 60초 이내 연속 측정한 혈당은 하나의 측정 묶음으로 계산합니다.
@@ -454,8 +458,10 @@ fun EasyHealthApp(context: Context) {
     val personRecords = records.filter { it.person == selectedPerson }.sortedByDescending { it.timestamp }
     val selectedProfile = personProfiles[selectedPerson] ?: PersonProfile(selectedPerson)
     val activeTypes = devices.filter { enabledDevices.contains(it.first) && registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
-    val reportRecords = personRecords.filter { activeTypes.contains(it.type) }
-    val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
+    // 리포트는 초기 화면 표시 설정과 분리하고, 등록된 기기의 측정 항목을 자동 포함합니다.
+    val reportEnabledTypes = devices.filter { registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
+    val reportRecords = personRecords.filter { reportEnabledTypes.contains(it.type) }
+    val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
     if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
     val reportStart = Calendar.getInstance().apply {
@@ -724,7 +730,7 @@ fun EasyHealthApp(context: Context) {
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
-                    val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { activeTypes.contains(it) }
+                    val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
                     ScrollableTabRow(selectedTabIndex = listOf("1주일", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
@@ -759,8 +765,8 @@ fun EasyHealthApp(context: Context) {
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
                                         val graphCanvasWidth = when (reportPeriod) {
-                                            "전체" -> maxOf(360.dp, (graphRows.size * 3).dp)
-                                            "3개월" -> maxOf(540.dp, (graphRows.size * 8).dp)
+                                            "전체" -> maxOf(360.dp, (graphRows.size * 2.5f).dp)
+                                            "3개월" -> maxOf(360.dp, (graphRows.size * 5).dp)
                                             "1개월" -> maxOf(420.dp, (graphRows.size * 8).dp)
                                             else -> 360.dp
                                         }
@@ -913,7 +919,7 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
-                        Text("짧게 누르면 리포트 포함 여부를 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
+                        Text("짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
                     Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                 }
@@ -1258,7 +1264,7 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                 ProfileTimeRow("점심 식사 시간", lunchTime) { lunchTime = it }
                 ProfileTimeRow("저녁 식사 시간", dinnerTime) { dinnerTime = it }
                 ProfileTimeRow("취침 시간", bedtime) { bedtime = it }
-                Text("입력한 생활 시간을 기준으로 측정 기록에 공복·식전·식후·취침 전 표시를 붙입니다. 식전은 식사 30분 전, 식후는 식사 후 2시간, 취침 전은 취침 1시간 전 기준입니다.", color = Color.Gray, fontSize = 10.sp)
+                Text("입력한 식사 기준시간보다 이르면 식전, 지나면 식후로 표시합니다. 기상 후 아침 식사 전 구간은 공복으로, 취침시간 전후 1시간은 취침전으로 표시합니다.", color = Color.Gray, fontSize = 10.sp)
                 Text("키를 입력하면 체중 기록에서 BMI를 계산해 위험 참고 색상에 반영합니다. 성별과 나이는 개인별 리포트 해석에 활용합니다.", color = Color.Gray, fontSize = 11.sp)
             }
         },
