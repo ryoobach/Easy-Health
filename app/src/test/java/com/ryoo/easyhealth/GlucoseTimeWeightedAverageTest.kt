@@ -88,6 +88,42 @@ class GlucoseTimeWeightedAverageTest {
         assertNull(result)
     }
 
+    @Test fun reportWindowExcludesReadingsOutsideSelectedPeriod() {
+        val result = calculateTimeWeightedGlucoseEstimate(
+            records = listOf(
+                reading("900", -hour),
+                reading("100", 0),
+                reading("200", hour),
+                reading("800", 2 * hour)
+            ),
+            nowMillis = base + 3 * hour,
+            windowStartMillis = base,
+            windowEndMillis = base + hour,
+            minimumMeasurements = 2,
+            minimumSpanMillis = 0L,
+            minimumCoveredMillis = 1L
+        )
+        assertNotNull(result)
+        assertEquals(100.0, result!!.averageMgDl, 0.0001)
+        assertEquals(2, result.measurementCount)
+        assertEquals(hour, result.coveredMillis)
+    }
+
+    @Test fun explicitReportWindowCanIncludeHistoryOlderThanNinetyDays() {
+        val oldOffset = -120L * day
+        val result = calculateTimeWeightedGlucoseEstimate(
+            records = listOf(reading("140", oldOffset), reading("160", oldOffset + hour)),
+            nowMillis = base + 90 * day,
+            windowStartMillis = base - 180 * day,
+            windowEndMillis = base + 90 * day,
+            minimumMeasurements = 2,
+            minimumSpanMillis = 0L,
+            minimumCoveredMillis = 1L
+        )
+        assertNotNull(result)
+        assertEquals(140.0, result!!.averageMgDl, 0.0001)
+    }
+
     @Test fun eAgAndHbA1cConversionCanBeReversed() {
         val result = estimate(listOf(reading("154.2", 0), reading("154.2", hour)))
         assertNotNull(result)
