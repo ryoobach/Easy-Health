@@ -529,6 +529,7 @@ fun EasyHealthApp(context: Context) {
                     transferServerActive = false
                     transferStartPending = false
                     discoverabilityRequestPending = false
+                    receiverServerStartRequested = false
                 }
             }
         }
