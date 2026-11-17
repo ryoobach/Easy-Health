@@ -35,6 +35,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Run glucose time-weighted calculation unit tests
+        run: gradle --no-daemon --no-build-cache testDebugUnitTest
       - name: Build APK with the established signing key
         run: gradle --no-daemon --no-build-cache --rerun-tasks assembleDebug
       - name: Verify update identity and version
@@ -44,10 +46,13 @@ jobs:
           test -n "$APK_ANALYZER"
           APP_ID="$("$APK_ANALYZER" manifest application-id "$APK")"
           VERSION_CODE="$("$APK_ANALYZER" manifest version-code "$APK")"
+          VERSION_NAME="$("$APK_ANALYZER" manifest version-name "$APK")"
           echo "Application ID: $APP_ID"
           echo "Version code: $VERSION_CODE"
+          echo "Version name: $VERSION_NAME"
           test "$APP_ID" = "com.ryoo.easyhealth"
-          test "$VERSION_CODE" -ge 29
+          test "$VERSION_CODE" = "36"
+          test "$VERSION_NAME" = "1.36"
       - name: Verify APK uses the established signing certificate
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
