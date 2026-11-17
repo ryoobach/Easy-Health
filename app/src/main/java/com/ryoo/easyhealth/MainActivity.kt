@@ -460,10 +460,10 @@ fun EasyHealthApp(context: Context) {
                     transferStatus = message
                     if (message.contains("검색이 끝났습니다") || message.contains("검색을 취소") ||
                         message.contains("검색을 시작하지 못") || message.contains("검색에 실패")) transferSearching = false
-                    if (message.contains("수신 대기 중")) transferServerActive = true
-                    if (message.contains("데이터를 수신하고 있습니다")) transferServerActive = false
-                    if (message.contains("전송이 완료") || message.contains("실패") || message.contains("오류") ||
-                        message.contains("수신 대기를 취소")) transferServerActive = false
+                    if (message.contains("수신 서버를 시작") || message.contains("수신 대기 중")) transferServerActive = true
+                    if (message.contains("전송이 완료") || message.contains("가져오기 완료") ||
+                        message.contains("실패") || message.contains("오류") ||
+                        message.contains("수신 대기를 취소") || message.contains("허용이 취소")) transferServerActive = false
                 }
             }
             override fun onPeers(peers: List<TransferPeer>) { onUi { transferPeers = peers } }
@@ -501,6 +501,7 @@ fun EasyHealthApp(context: Context) {
                         persistRecords(context, records)
                         transferStatus = "가져오기 완료: 새 기록 " + imported + "건 · 중복 제외 " + duplicates + "건"
                         transferProgress = 1f
+                        transferServerActive = false
                         transferOffer = null
                     } catch (e: Exception) {
                         transferStatus = "가져온 데이터 처리 실패: " + (e.localizedMessage ?: "형식 오류")
@@ -513,12 +514,14 @@ fun EasyHealthApp(context: Context) {
         }
     }
     val discoverabilityLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
-            transferStatus = "기기 검색 허용을 확인했습니다. 수신 서버를 시작합니다."
+        // ACTION_REQUEST_DISCOVERABLE returns the granted discoverable duration (> 0).
+        if (result.resultCode > 0) {
+            transferServerActive = true
+            transferStatus = "기기 검색이 허용되었습니다. 수신 서버를 시작합니다."
             recordTransfer.startServer(transferListener)
         } else {
             transferServerActive = false
-            transferStatus = "블루투스 검색 허용이 취소되어 수신 대기를 시작하지 않았습니다."
+            transferStatus = "기기 검색 허용이 취소되었습니다. 가져오기 화면에서 다시 시도해 주세요."
         }
     }
     fun startTransferAction() {
@@ -530,7 +533,8 @@ fun EasyHealthApp(context: Context) {
             transferStatus = "주변 블루투스 기기를 검색하고 있습니다."
             recordTransfer.startDiscovery(transferListener)
         } else {
-            transferServerActive = false
+            // Keep the receive dialog active while Android displays its discoverability prompt.
+            transferServerActive = true
             transferStatus = "다른 기기에서 이 태블릿을 검색할 수 있도록 허용해 주세요."
             val request = Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
                 .putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
@@ -767,7 +771,7 @@ fun EasyHealthApp(context: Context) {
                             Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(3.dp)); Text("블루투스 자동 가져오기", fontSize = 9.sp, lineHeight = 11.sp)
                         }
                         OutlinedButton(onClick = { transferMode = "보내기"; showTransferDialog = true; transferStatus = "전송할 사용자와 기간을 선택해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 보내기", fontSize = 9.sp) }
-                        OutlinedButton(onClick = { transferMode = "받기"; showTransferDialog = true; transferStatus = "받을 준비를 해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 받기", fontSize = 9.sp) }
+                        OutlinedButton(onClick = { transferMode = "가져오기"; showTransferDialog = true; transferStatus = "가져올 준비를 해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 가져오기", fontSize = 9.sp) }
                     }
                     if (personRecords.isEmpty()) {
                         Text("이 대상자의 측정 기록이 없습니다.", color = Color.Gray, modifier = Modifier.padding(12.dp))
@@ -1315,7 +1319,7 @@ fun EasyHealthApp(context: Context) {
         AlertDialog(
             onDismissRequest = {
                 if (transferSearching) recordTransfer.cancelDiscovery()
-                if (transferServerActive) recordTransfer.stopServer()
+                if (transferServerActive || transferMode == "가져오기") recordTransfer.stopServer()
                 transferSearching = false
                 transferServerActive = false
                 showTransferBluetoothSearch = false
@@ -1348,7 +1352,10 @@ fun EasyHealthApp(context: Context) {
                         if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
                     } else {
                         Text(
-                            if (transferServerActive) "다른 기기에서 이 기기를 찾을 수 있습니다. 상대 기기에서 내보내기를 진행해 주세요."
+                            if (transferServerActive && transferStatus.contains("수신 대기 중"))
+                                "다른 기기에서 이 기기를 검색할 수 있습니다. 보내는 기기에서 내보내기를 진행해 주세요."
+                            else if (transferServerActive)
+                                "가져오기 준비 중입니다. 이 화면을 유지해 주세요."
                             else "가져오기를 시작하면 다른 기기에서 이 기기를 검색할 수 있도록 허용한 뒤 자동으로 수신 대기합니다.",
                             color = Color.Gray, fontSize = 12.sp
                         )
@@ -1377,7 +1384,7 @@ fun EasyHealthApp(context: Context) {
             },
             dismissButton = { TextButton(onClick = {
                 if (transferSearching) recordTransfer.cancelDiscovery()
-                if (transferServerActive) recordTransfer.stopServer()
+                if (transferServerActive || transferMode == "가져오기") recordTransfer.stopServer()
                 transferSearching = false
                 transferServerActive = false
                 showTransferDialog = false
