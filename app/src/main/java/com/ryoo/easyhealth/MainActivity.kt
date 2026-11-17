@@ -720,8 +720,22 @@ fun EasyHealthApp(context: Context) {
         }
     }.timeInMillis
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp in reportStart..now }
-    // 초기 화면과 건강 리포트는 동일한 최근 90일 시간 가중 추정 결과를 사용합니다.
+    // 초기 화면은 최근 90일 기준을 유지하고, 리포트는 선택한 기간만 별도로 계산합니다.
     val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
+    val reportGlucoseRecords = personRecords.filter { it.type == "혈당" }
+    val reportA1cWindowStart = if (reportPeriod == "전체") {
+        reportGlucoseRecords.minOfOrNull { it.timestamp } ?: now
+    } else reportStart
+    val reportWindowDuration = (now - reportA1cWindowStart).coerceAtLeast(0L)
+    val reportA1cEstimate = calculateTimeWeightedGlucoseEstimate(
+        records = reportGlucoseRecords,
+        nowMillis = now,
+        windowStartMillis = reportA1cWindowStart,
+        windowEndMillis = now,
+        // For a one-week report, require a meaningful multi-day span without making a full
+        // seven-day span mathematically mandatory. Longer reports retain the existing 7-day floor.
+        minimumSpanMillis = minOf(7L * 24L * 60L * 60L * 1000L, maxOf(24L * 60L * 60L * 1000L, reportWindowDuration / 2L))
+    )
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(
