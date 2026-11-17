@@ -381,11 +381,23 @@ fun EasyHealthApp(context: Context) {
     var personEditing by remember { mutableStateOf<PersonProfile?>(null) }
     var personDeleteTarget by remember { mutableStateOf<String?>(null) }
     var showDeviceInfo by remember { mutableStateOf(false) }
+    var showTransferDialog by remember { mutableStateOf(false) }
+    var transferMode by remember { mutableStateOf("보내기") }
+    var transferStatus by remember { mutableStateOf("보내기 또는 받기를 선택해 주세요.") }
+    var transferPeers by remember { mutableStateOf<List<TransferPeer>>(emptyList()) }
+    var transferTarget by remember { mutableStateOf<TransferPeer?>(null) }
+    var transferOffer by remember { mutableStateOf<TransferOffer?>(null) }
+    var transferProgress by remember { mutableStateOf(0f) }
+    var transferPerson by remember { mutableStateOf(selectedPerson) }
+    var transferFrom by remember { mutableStateOf(Calendar.getInstance().apply { add(Calendar.MONTH, -1) }.timeInMillis) }
+    var transferTo by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showTransferPersonMenu by remember { mutableStateOf(false) }
     var showBluetoothSearch by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
     var activeBluetoothName by remember { mutableStateOf("블루투스 측정기") }
     var bluetoothCandidates by remember { mutableStateOf<List<MeterCandidate>>(emptyList()) }
     val bluetoothClient = remember { BluetoothGlucoseClient(context) }
+    val recordTransfer = remember { BluetoothRecordTransfer(context) }
     val bluetoothListener = remember(selectedPerson) {
         object : BluetoothGlucoseClient.Listener {
             override fun onStatus(message: String) { bluetoothStatus = message }
