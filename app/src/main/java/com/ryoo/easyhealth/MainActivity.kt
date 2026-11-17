@@ -5,6 +5,7 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -509,19 +510,31 @@ fun EasyHealthApp(context: Context) {
                 }
             }
             override fun onError(message: String) {
-                onUi { transferStatus = message; transferSearching = false; transferServerActive = false }
+                Log.e("EasyHealthTransfer", "Transfer error: $message")
+                onUi { transferStatus = "오류: $message"; transferSearching = false; transferServerActive = false }
             }
         }
     }
     val discoverabilityLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        // ACTION_REQUEST_DISCOVERABLE returns the granted discoverable duration (> 0).
+        // Android returns the discoverable duration in seconds, or RESULT_CANCELED.
+        Log.i("EasyHealthTransfer", "Discoverability resultCode=${result.resultCode}")
+        transferServerActive = false
         if (result.resultCode > 0) {
-            transferServerActive = true
-            transferStatus = "기기 검색이 허용되었습니다. 수신 서버를 시작합니다."
-            recordTransfer.startServer(transferListener)
+            val connectGranted = android.os.Build.VERSION.SDK_INT < 31 ||
+                context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val advertiseGranted = android.os.Build.VERSION.SDK_INT < 31 ||
+                context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!connectGranted || !advertiseGranted) {
+                transferStatus = "기기 검색은 허용됐지만 블루투스 권한이 확인되지 않습니다. 앱 권한을 확인한 뒤 다시 시도해 주세요."
+                Log.e("EasyHealthTransfer", "Permission check after discoverability: connect=$connectGranted advertise=$advertiseGranted")
+            } else {
+                transferStatus = "기기 검색 허용 확인(${result.resultCode}초). 수신 서버 소켓을 생성하고 있습니다."
+                Log.i("EasyHealthTransfer", "Starting RFCOMM server after discoverability approval")
+                recordTransfer.startServer(transferListener)
+            }
         } else {
-            transferServerActive = false
-            transferStatus = "기기 검색 허용이 취소되었습니다. 가져오기 화면에서 다시 시도해 주세요."
+            transferStatus = "기기 검색 허용이 취소되었거나 Android에서 요청을 완료하지 못했습니다. 다시 시도해 주세요."
+            Log.w("EasyHealthTransfer", "Discoverability denied/cancelled")
         }
     }
     fun startTransferAction() {
@@ -533,9 +546,10 @@ fun EasyHealthApp(context: Context) {
             transferStatus = "주변 블루투스 기기를 검색하고 있습니다."
             recordTransfer.startDiscovery(transferListener)
         } else {
-            // Keep the receive dialog active while Android displays its discoverability prompt.
-            transferServerActive = true
-            transferStatus = "다른 기기에서 이 태블릿을 검색할 수 있도록 허용해 주세요."
+            // Do not mark the server active until the RFCOMM socket is actually listening.
+            transferServerActive = false
+            transferStatus = "Android 기기 검색 허용을 기다리고 있습니다."
+            Log.i("EasyHealthTransfer", "Launching ACTION_REQUEST_DISCOVERABLE")
             val request = Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
                 .putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
             discoverabilityLauncher.launch(request)
