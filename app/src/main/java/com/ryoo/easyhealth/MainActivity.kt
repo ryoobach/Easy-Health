@@ -1320,7 +1320,7 @@ fun EasyHealthApp(context: Context) {
         AlertDialog(
             onDismissRequest = { transferOffer = null; recordTransfer.rejectIncoming() },
             title = { Text("데이터 수신 승인") },
-            text = { Text(offer.peerName + " 기기에서 " + offer.person + " 사용자 기록 " + offer.count + "건을 보내려고 합니다. 받으시겠습니까?") },
+            text = { Text(offer.peerName + " 기기에서 전송을 요청했습니다.\\n사용자: " + offer.person + "\\n기간: " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.from)) + " ~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.to)) + "\\n기록: " + offer.count + "건\\n\\n받으시겠습니까?") },
             confirmButton = { TextButton(onClick = { transferOffer = null; recordTransfer.acceptIncoming(offer) }) { Text("승인") } },
             dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } }
         )
