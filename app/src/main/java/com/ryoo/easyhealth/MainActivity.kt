@@ -723,7 +723,7 @@ fun EasyHealthApp(context: Context) {
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp in reportStart..now }
     // 초기 화면은 최근 90일 기준을 유지하고, 리포트는 선택한 기간만 별도로 계산합니다.
     val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
-    val reportGlucoseRecords = personRecords.filter { it.type == "혈당" }
+    val reportGlucoseRecords = personRecords.filter { it.type == "혈당" && it.timestamp <= now }
     val reportA1cWindowStart = if (reportPeriod == "전체") {
         reportGlucoseRecords.minOfOrNull { it.timestamp } ?: now
     } else reportStart
