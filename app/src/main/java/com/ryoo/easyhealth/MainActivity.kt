@@ -678,7 +678,7 @@ fun EasyHealthApp(context: Context) {
                     Card(colors = CardDefaults.cardColors(containerColor = PaleGreen)) {
                         Column(Modifier.padding(16.dp)) {
                             Text("함께 만드는 Easy Health", color = Green, fontWeight = FontWeight.Bold)
-                            Text("개발: Ryoo Jaesang & 최피디\nAI 개발 협력: ChatGPT (OpenAI)", color = Ink, fontSize = 12.sp)
+                            Text("개발: Ryoo Jaesang & 최피디", color = Ink, fontSize = 12.sp)
                         }
                     }
                 }
