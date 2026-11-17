@@ -112,12 +112,18 @@ class BluetoothRecordTransfer(private val context: Context) {
         }
     }
 
+    @Synchronized
     fun startServer(listener: Listener) {
         this.listener = listener
         try {
             requireBluetoothPermissions(needsConnect = true, needsAdvertise = true)
             val a = adapter ?: throw IOException("블루투스를 지원하지 않습니다.")
-            if (!a.isEnabled) throw IOException("블루투스가 꺼져 있습니다. 블루투스를 켠 뒤 다시 시도해 주세요.")
+            if (!a.isEnabled) throw IOException("블루투스가 꺼져 있습니다.")
+            if (serverRunning) {
+                Log.w("EasyHealthTransfer", "Duplicate startServer call ignored; RFCOMM server is already active")
+                listener.onStatus("수신 서버가 이미 실행 중입니다.")
+                return
+            }
             try { server?.close() } catch (_: Exception) { }
             try { pendingSocket?.close() } catch (_: Exception) { }
             pendingSocket = null
@@ -137,8 +143,8 @@ class BluetoothRecordTransfer(private val context: Context) {
                         if (server === socketServer) server = null
                         return@execute
                     }
+                    Log.i("EasyHealthTransfer", "RFCOMM server socket is ready; entering blocking accept()")
                     listener.onStatus("수신 대기 중입니다. 보내는 기기에서 이 기기를 검색해 주세요.")
-                    Log.i("EasyHealthTransfer", "RFCOMM server is listening; waiting for accept()")
                     socket = socketServer.accept()
                     Log.i("EasyHealthTransfer", "RFCOMM client accepted")
                     pendingSocket = socket
@@ -202,6 +208,7 @@ class BluetoothRecordTransfer(private val context: Context) {
         listener?.onStatus("기기 검색을 취소했습니다.")
     }
 
+    @Synchronized
     fun stopServer() {
         serverRunning = false
         try { server?.close() } catch (_: Exception) { }
