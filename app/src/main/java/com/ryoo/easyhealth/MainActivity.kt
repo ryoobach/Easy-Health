@@ -383,7 +383,7 @@ fun EasyHealthApp(context: Context) {
     var showDeviceInfo by remember { mutableStateOf(false) }
     var showTransferDialog by remember { mutableStateOf(false) }
     var transferMode by remember { mutableStateOf("보내기") }
-    var transferStatus by remember { mutableStateOf("보내기 또는 받기를 선택해 주세요.") }
+    var transferStatus by remember { mutableStateOf("전송 방식을 선택해 주세요.") }
     var transferPeers by remember { mutableStateOf<List<TransferPeer>>(emptyList()) }
     var transferTarget by remember { mutableStateOf<TransferPeer?>(null) }
     var transferOffer by remember { mutableStateOf<TransferOffer?>(null) }
@@ -461,6 +461,7 @@ fun EasyHealthApp(context: Context) {
                     if (message.contains("검색이 끝났습니다") || message.contains("검색을 취소") ||
                         message.contains("검색을 시작하지 못") || message.contains("검색에 실패")) transferSearching = false
                     if (message.contains("수신 대기 중")) transferServerActive = true
+                    if (message.contains("데이터를 수신하고 있습니다")) transferServerActive = false
                     if (message.contains("전송이 완료") || message.contains("실패") || message.contains("오류") ||
                         message.contains("수신 대기를 취소")) transferServerActive = false
                 }
@@ -1320,69 +1321,72 @@ fun EasyHealthApp(context: Context) {
                 showTransferBluetoothSearch = false
                 showTransferDialog = false
             },
-            title = { Text("기기 간 블루투스 전송") },
+            title = { Text(if (transferMode == "보내기") "데이터 내보내기" else "데이터 가져오기") },
             text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = transferMode == "보내기", onClick = { transferMode = "보내기" }, label = { Text("보내기") })
-                        FilterChip(selected = transferMode == "받기", onClick = { transferMode = "받기" }, label = { Text("받기") })
-                    }
+                Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(transferStatus, color = Green, fontSize = 12.sp)
                     if (transferMode == "보내기") {
-                        Text("사용자: " + transferPerson)
-                        people.forEach { p -> TextButton(onClick = { transferPerson = p }) { Text(p) } }
-                        Text("전송 기간")
-                        Row {
+                        Text("내보낼 사용자")
+                        people.forEach { p ->
+                            FilterChip(selected = transferPerson == p, onClick = { transferPerson = p }, label = { Text(p) })
+                        }
+                        Text("내보낼 날짜 기간")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TextButton(onClick = {
                                 val c = Calendar.getInstance().apply { timeInMillis = transferFrom }
-                                DatePickerDialog(context, { _, y, m, d -> transferFrom = Calendar.getInstance().apply { set(y, m, d, 0, 0, 0) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+                                DatePickerDialog(context, { _, y, m, d ->
+                                    transferFrom = Calendar.getInstance().apply { set(y, m, d, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+                                }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
                             }) { Text("시작 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferFrom))) }
                             TextButton(onClick = {
                                 val c = Calendar.getInstance().apply { timeInMillis = transferTo }
-                                DatePickerDialog(context, { _, y, m, d -> transferTo = Calendar.getInstance().apply { set(y, m, d, 23, 59, 59) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+                                DatePickerDialog(context, { _, y, m, d ->
+                                    transferTo = Calendar.getInstance().apply { set(y, m, d, 23, 59, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis
+                                }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
                             }) { Text("종료 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferTo))) }
                         }
-                        Text("선택된 기기: " + (transferTarget?.name ?: "아직 선택하지 않았습니다."), color = if (transferTarget == null) Color.Gray else Green, fontSize = 12.sp)
+                        if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
                     } else {
-                        Text(if (transferServerActive)
-                            "수신 대기 중입니다. 다른 기기의 Easy Health에서 이 태블릿을 검색해 주세요."
-                            else "수신 대기를 시작하면 다른 기기에서 이 태블릿을 검색할 수 있습니다.")
+                        Text(
+                            if (transferServerActive) "다른 기기에서 이 기기를 찾을 수 있습니다. 상대 기기에서 내보내기를 진행해 주세요."
+                            else "가져오기를 시작하면 다른 기기에서 이 기기를 검색할 수 있도록 허용한 뒤 자동으로 수신 대기합니다.",
+                            color = Color.Gray, fontSize = 12.sp
+                        )
+                        if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
                     }
-                    if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
                 if (transferMode == "보내기") {
-                    Row {
-                        TextButton(onClick = { requestTransferPermissions() }) { Text("기기 검색") }
-                        TextButton(onClick = {
-                            val selected = records.filter { it.person == transferPerson && it.timestamp in transferFrom..transferTo }
-                            when {
-                                transferFrom > transferTo -> transferStatus = "날짜 범위를 확인해 주세요."
-                                transferTarget == null -> transferStatus = "받는 기기를 선택해 주세요."
-                                selected.isEmpty() -> transferStatus = "선택 기간에 기록이 없습니다."
-                                else -> { transferProgress = 0f; recordTransfer.send(transferTarget!!, transferPerson, transferFrom, transferTo, encodeRecords(selected), selected.size) }
-                            }
-                        }) { Text("보내기") }
-                    }
-                } else TextButton(onClick = {
-                    if (transferServerActive) {
-                        recordTransfer.stopServer()
-                        transferServerActive = false
-                    } else requestTransferPermissions()
-                }) { Text(if (transferServerActive) "수신 대기 취소" else "수신 대기 시작") }
+                    TextButton(onClick = {
+                        val selected = records.filter { it.person == transferPerson && it.timestamp in transferFrom..transferTo }
+                        when {
+                            transferFrom > transferTo -> transferStatus = "날짜 기간을 다시 확인해 주세요."
+                            selected.isEmpty() -> transferStatus = "선택한 기간에 내보낼 기록이 없습니다."
+                            else -> requestTransferPermissions()
+                        }
+                    }) { Text("기기 검색") }
+                } else {
+                    TextButton(onClick = {
+                        if (transferServerActive) {
+                            recordTransfer.stopServer()
+                            transferServerActive = false
+                        } else requestTransferPermissions()
+                    }) { Text(if (transferServerActive) "수신 대기 취소" else "가져오기 시작") }
+                }
             },
-            dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text("닫기") } }
+            dismissButton = { TextButton(onClick = {
+                if (transferSearching) recordTransfer.cancelDiscovery()
+                if (transferServerActive) recordTransfer.stopServer()
+                transferSearching = false
+                transferServerActive = false
+                showTransferDialog = false
+            }) { Text("닫기") } }
         )
     }
     transferOffer?.let { offer ->
-        AlertDialog(
-            onDismissRequest = { transferOffer = null; recordTransfer.rejectIncoming() },
-            title = { Text("데이터 수신 승인") },
-            text = { Text(offer.peerName + " 기기에서 전송을 요청했습니다.\n사용자: " + offer.person + "\n기간: " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.from)) + " ~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.to)) + "\n기록: " + offer.count + "건\n\n받으시겠습니까?") },
-            confirmButton = { TextButton(onClick = { transferOffer = null; recordTransfer.acceptIncoming(offer) }) { Text("승인") } },
-            dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } }
-        )
+        // 이전 버전 호환 상태만 정리합니다. 새 수신 흐름은 별도 승인 없이 자동 수신합니다.
+        LaunchedEffect(offer) { transferOffer = null }
     }
     if (showTransferBluetoothSearch) {
         AlertDialog(
@@ -1401,10 +1405,9 @@ fun EasyHealthApp(context: Context) {
                     if (transferSearching) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     if (transferPeers.isEmpty()) {
                         Text(
-                            if (transferSearching) "주변 기기를 찾고 있습니다. 받는 기기의 수신 대기를 켜 주세요."
+                            if (transferSearching) "주변 기기를 찾고 있습니다. 받는 기기에서 가져오기를 시작해 주세요."
                             else "검색된 기기가 없습니다. 받는 기기의 블루투스와 수신 대기 상태를 확인한 뒤 다시 검색해 주세요.",
-                            color = Color.Gray,
-                            fontSize = 12.sp
+                            color = Color.Gray, fontSize = 12.sp
                         )
                     } else {
                         transferPeers.forEach { peer ->
@@ -1414,12 +1417,20 @@ fun EasyHealthApp(context: Context) {
                                     transferSearching = false
                                     recordTransfer.cancelDiscovery()
                                     showTransferBluetoothSearch = false
-                                    transferStatus = peer.name + " 기기를 선택했습니다. 보내기 버튼을 눌러 전송해 주세요."
+                                    val selected = records.filter { it.person == transferPerson && it.timestamp in transferFrom..transferTo }
+                                    if (selected.isEmpty()) {
+                                        transferStatus = "선택한 기간에 내보낼 기록이 없습니다."
+                                    } else {
+                                        transferProgress = 0f
+                                        transferStatus = peer.name + " 기기에 연결하고 데이터를 전송합니다."
+                                        recordTransfer.send(peer, transferPerson, transferFrom, transferTo, encodeRecords(selected), selected.size)
+                                    }
                                 }
                             ) {
                                 Column(Modifier.padding(12.dp)) {
                                     Text(peer.name, color = Ink, fontWeight = FontWeight.SemiBold)
                                     Text(peer.address, color = Color.Gray, fontSize = 11.sp)
+                                    Text("선택하면 연결 후 자동 전송됩니다.", color = Green, fontSize = 11.sp)
                                 }
                             }
                         }
