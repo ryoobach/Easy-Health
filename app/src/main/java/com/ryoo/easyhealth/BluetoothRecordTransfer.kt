@@ -126,10 +126,15 @@ class BluetoothRecordTransfer(private val context: Context) {
                 try {
                     socketServer = a.listenUsingRfcommWithServiceRecord(SERVICE_NAME, SERVICE_UUID)
                     server = socketServer
+                    if (!serverRunning) {
+                        try { socketServer.close() } catch (_: Exception) { }
+                        if (server === socketServer) server = null
+                        return@execute
+                    }
                     listener.onStatus("수신 대기 중입니다. 보내는 기기에서 이 기기를 검색해 주세요.")
                     socket = socketServer.accept()
                     pendingSocket = socket
-                    serverRunning = false
+                    listener.onStatus("보내는 기기와 연결되었습니다. 데이터 수신을 준비합니다.")
                     try { socketServer.close() } catch (_: Exception) { }
                     if (server === socketServer) server = null
 
@@ -159,9 +164,11 @@ class BluetoothRecordTransfer(private val context: Context) {
                     }
                     val json = String(bytes, Charsets.UTF_8)
                     JSONArray(json)
+                    listener.onStatus("데이터 수신이 완료되었습니다. 저장을 마무리합니다.")
                     listener.onReceived(json, offer)
                     try { socket.close() } catch (_: Exception) { }
                     if (pendingSocket === socket) pendingSocket = null
+                    serverRunning = false
                     listener.onStatus("데이터 수신이 완료되었습니다.")
                 } catch (e: Exception) {
                     if (serverRunning) listener.onError(e.message ?: "수신 대기 중 오류가 발생했습니다.")
@@ -240,8 +247,10 @@ class BluetoothRecordTransfer(private val context: Context) {
             try {
                 requireBluetoothPermissions(needsScan = true, needsConnect = true)
                 adapter?.cancelDiscovery()
+                listener?.onStatus(peer.name + " 기기의 페어링 및 연결을 진행하고 있습니다. Android 페어링 요청이 나타나면 허용해 주세요.")
                 socket = peer.device.createRfcommSocketToServiceRecord(SERVICE_UUID)
                 socket.connect()
+                listener?.onStatus(peer.name + " 기기와 블루투스 연결이 완료되었습니다. 데이터를 전송합니다.")
                 val output = DataOutputStream(socket.outputStream)
                 val input = DataInputStream(socket.inputStream)
                 output.writeUTF(JSONObject().put("kind", "offer").put("device", adapter?.name ?: "Easy Health")
