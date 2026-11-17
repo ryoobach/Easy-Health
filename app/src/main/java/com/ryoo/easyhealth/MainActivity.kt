@@ -1004,9 +1004,9 @@ fun EasyHealthApp(context: Context) {
     if (deviceHelpTarget != null) {
         val helpName = deviceHelpTarget!!
         val helpText = when (helpName) {
-            "Contour Plus ONE" -> "1. 측정기 전원을 끕니다.\\n2. OK 버튼을 길게 눌러 블루투스 표시가 깜박이도록 합니다.\\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\\n4. 검색된 Contour Plus ONE을 선택해 연결합니다."
-            "CareSens Dual" -> "1. 측정기에서 S 버튼을 약 3초 누릅니다.\\n2. YES → BT → PAIR 순서로 선택합니다.\\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\\n4. 검색된 CareSens 기기를 선택하고 측정기 화면의 PIN 안내에 따라 연결합니다."
-            else -> "1. 측정기를 켜고 블루투스 페어링 모드로 설정합니다.\\n2. 휴대폰 설정의 블루투스에서 기기를 검색해 등록합니다.\\n3. Easy Health의 기기 등록에서 해당 측정 항목을 활성화합니다.\\n4. 자동 가져오기는 기기별 데이터 전송 방식이 지원되는 경우에 사용할 수 있습니다."
+            "Contour Plus ONE" -> "1. 측정기 전원을 끕니다.\n2. OK 버튼을 길게 눌러 블루투스 표시가 깜박이도록 합니다.\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\n4. 검색된 Contour Plus ONE을 선택해 연결합니다."
+            "CareSens Dual" -> "1. 측정기에서 S 버튼을 약 3초 누릅니다.\n2. YES → BT → PAIR 순서로 선택합니다.\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\n4. 검색된 CareSens 기기를 선택하고 측정기 화면의 PIN 안내에 따라 연결합니다."
+            else -> "1. 측정기를 켜고 블루투스 페어링 모드로 설정합니다.\n2. 휴대폰 설정의 블루투스에서 기기를 검색해 등록합니다.\n3. Easy Health의 기기 등록에서 해당 측정 항목을 활성화합니다.\n4. 자동 가져오기는 기기별 데이터 전송 방식이 지원되는 경우에 사용할 수 있습니다."
         }
         AlertDialog(onDismissRequest = { deviceHelpTarget = null }, title = { Text("$helpName 연결 방법") },
             text = { Text(helpText, color = Ink, fontSize = 13.sp, lineHeight = 20.sp) },
@@ -1320,7 +1320,7 @@ fun EasyHealthApp(context: Context) {
         AlertDialog(
             onDismissRequest = { transferOffer = null; recordTransfer.rejectIncoming() },
             title = { Text("데이터 수신 승인") },
-            text = { Text(offer.peerName + " 기기에서 전송을 요청했습니다.\\n사용자: " + offer.person + "\\n기간: " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.from)) + " ~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.to)) + "\\n기록: " + offer.count + "건\\n\\n받으시겠습니까?") },
+            text = { Text(offer.peerName + " 기기에서 전송을 요청했습니다.\n사용자: " + offer.person + "\n기간: " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.from)) + " ~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(offer.to)) + "\n기록: " + offer.count + "건\n\n받으시겠습니까?") },
             confirmButton = { TextButton(onClick = { transferOffer = null; recordTransfer.acceptIncoming(offer) }) { Text("승인") } },
             dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } }
         )
