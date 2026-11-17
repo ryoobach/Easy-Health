@@ -449,7 +449,67 @@ fun EasyHealthApp(context: Context) {
         if (missing.isEmpty()) bluetoothClient.startScan(bluetoothListener)
         else bluetoothPermissionLauncher.launch(missing.toTypedArray())
     }
-    DisposableEffect(Unit) { onDispose { bluetoothClient.close() } }
+    val transferListener = remember {
+        object : BluetoothRecordTransfer.Listener {
+            private fun onUi(action: () -> Unit) { android.os.Handler(android.os.Looper.getMainLooper()).post(action) }
+            override fun onStatus(message: String) { onUi { transferStatus = message } }
+            override fun onPeers(peers: List<TransferPeer>) { onUi { transferPeers = peers } }
+            override fun onIncoming(offer: TransferOffer) { onUi { transferOffer = offer } }
+            override fun onProgress(done: Int, total: Int) { onUi { transferProgress = if (total > 0) done.toFloat() / total else 0f; transferStatus = "전송 중 " + (transferProgress * 100).toInt() + "%" } }
+            override fun onReceived(json: String, offer: TransferOffer) {
+                onUi {
+                    try {
+                        val array = JSONArray(json)
+                        var imported = 0
+                        if (!people.contains(offer.person)) {
+                            people.add(offer.person)
+                            personProfiles[offer.person] = PersonProfile(offer.person)
+                            prefs.edit().putString("people", JSONArray(people).toString()).apply()
+                            saveProfiles()
+                        }
+                        for (i in 0 until array.length()) {
+                            val o = array.getJSONObject(i)
+                            val person = o.optString("person", offer.person).ifBlank { offer.person }
+                            val item = VitalRecord(o.optString("id", UUID.randomUUID().toString()), person,
+                                o.optString("type", ""), o.optString("value", ""), o.optLong("timestamp"),
+                                o.optString("source", "블루투스 전송"), o.optString("note", ""), o.optString("externalId", ""))
+                            if (item.type.isNotBlank() && item.value.isNotBlank() &&
+                                records.none { it.id == item.id || (it.person == item.person && it.type == item.type && it.timestamp == item.timestamp && it.value == item.value) }) {
+                                records.add(item); imported++
+                            }
+                        }
+                        persistRecords(context, records)
+                        transferStatus = "가져오기 완료: 새 기록 " + imported + "건"
+                        transferOffer = null
+                    } catch (e: Exception) { transferStatus = "가져온 데이터 처리 실패: " + (e.localizedMessage ?: "형식 오류") }
+                }
+            }
+            override fun onError(message: String) { onUi { transferStatus = message } }
+        }
+    }
+    val transferPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants.values.all { it }) {
+            if (transferMode == "보내기") recordTransfer.startDiscovery(transferListener)
+            else {
+                context.startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300))
+                recordTransfer.startServer(transferListener)
+            }
+        } else transferStatus = "블루투스 검색·연결 권한을 허용해 주세요."
+    }
+    fun requestTransferPermissions() {
+        val required = if (android.os.Build.VERSION.SDK_INT >= 31)
+            arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_ADVERTISE)
+        else arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        val missing = required.filter { context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) {
+            if (transferMode == "보내기") recordTransfer.startDiscovery(transferListener)
+            else {
+                context.startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300))
+                recordTransfer.startServer(transferListener)
+            }
+        } else transferPermissionLauncher.launch(missing.toTypedArray())
+    }
+    DisposableEffect(Unit) { onDispose { bluetoothClient.close(); recordTransfer.close() } }
     var showAppInfo by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
