@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.DataInputStream
@@ -116,23 +117,30 @@ class BluetoothRecordTransfer(private val context: Context) {
         try {
             requireBluetoothPermissions(needsConnect = true, needsAdvertise = true)
             val a = adapter ?: throw IOException("블루투스를 지원하지 않습니다.")
-            if (!a.isEnabled) throw IOException("블루투스를 켜 주세요.")
+            if (!a.isEnabled) throw IOException("블루투스가 꺼져 있습니다. 블루투스를 켠 뒤 다시 시도해 주세요.")
             try { server?.close() } catch (_: Exception) { }
+            try { pendingSocket?.close() } catch (_: Exception) { }
+            pendingSocket = null
             serverRunning = true
-            listener.onStatus("수신 서버를 시작하고 있습니다.")
+            Log.i("EasyHealthTransfer", "startServer requested; adapter enabled=${a.isEnabled}, uuid=$SERVICE_UUID")
+            listener.onStatus("수신 서버를 시작하고 있습니다. 서버 소켓 생성 중...")
             executor.execute {
                 var socketServer: BluetoothServerSocket? = null
                 var socket: BluetoothSocket? = null
                 try {
+                    Log.i("EasyHealthTransfer", "Creating RFCOMM server socket; service=$SERVICE_NAME uuid=$SERVICE_UUID")
                     socketServer = a.listenUsingRfcommWithServiceRecord(SERVICE_NAME, SERVICE_UUID)
                     server = socketServer
+                    Log.i("EasyHealthTransfer", "RFCOMM server socket created successfully")
                     if (!serverRunning) {
                         try { socketServer.close() } catch (_: Exception) { }
                         if (server === socketServer) server = null
                         return@execute
                     }
                     listener.onStatus("수신 대기 중입니다. 보내는 기기에서 이 기기를 검색해 주세요.")
+                    Log.i("EasyHealthTransfer", "RFCOMM server is listening; waiting for accept()")
                     socket = socketServer.accept()
+                    Log.i("EasyHealthTransfer", "RFCOMM client accepted")
                     pendingSocket = socket
                     listener.onStatus("보내는 기기와 연결되었습니다. 데이터 수신을 준비합니다.")
                     try { socketServer.close() } catch (_: Exception) { }
@@ -171,8 +179,10 @@ class BluetoothRecordTransfer(private val context: Context) {
                     serverRunning = false
                     listener.onStatus("데이터 수신이 완료되었습니다.")
                 } catch (e: Exception) {
-                    if (serverRunning) listener.onError(e.message ?: "수신 대기 중 오류가 발생했습니다.")
-                    else if (socket != null) listener.onError(e.message ?: "데이터 수신에 실패했습니다.")
+                    Log.e("EasyHealthTransfer", "RFCOMM server/receive failure", e)
+                    val detail = e.localizedMessage ?: e.javaClass.simpleName
+                    if (serverRunning) listener.onError("수신 서버 실행 실패: $detail")
+                    else if (socket != null) listener.onError("데이터 수신 실패: $detail")
                     serverRunning = false
                     try { socketServer?.close() } catch (_: Exception) { }
                     try { socket?.close() } catch (_: Exception) { }
@@ -182,7 +192,8 @@ class BluetoothRecordTransfer(private val context: Context) {
             }
         } catch (e: Exception) {
             serverRunning = false
-            listener.onError(e.message ?: "수신 대기를 시작하지 못했습니다.")
+            Log.e("EasyHealthTransfer", "Unable to start RFCOMM server", e)
+            listener.onError("수신 대기를 시작하지 못했습니다: ${e.localizedMessage ?: e.javaClass.simpleName}")
         }
     }
 
