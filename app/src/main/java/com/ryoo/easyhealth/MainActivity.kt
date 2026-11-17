@@ -999,16 +999,16 @@ fun EasyHealthApp(context: Context) {
                     if (reportEnabledTypes.contains("혈당")) {
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("당화혈색소 앱 추정치 · 최근 90일", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("당화혈색소 앱 추정치 · ${reportPeriod}", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 Text(
-                                    timeWeightedA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "추정 불가",
-                                    color = timeWeightedA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
+                                    reportA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
+                                    color = reportA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
                                     fontSize = 24.sp, fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    timeWeightedA1cEstimate?.let {
+                                    reportA1cEstimate?.let {
                                         "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간 · 기간 ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.firstTimestamp))}~${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.lastTimestamp))}"
-                                    } ?: "측정 기록 수, 기간 또는 유효 시간 구간이 부족합니다.",
+                                    } ?: "선택한 기간의 측정 횟수, 측정 기간 또는 유효 시간 구간이 부족합니다.",
                                     color = Color.Gray, fontSize = 11.sp
                                 )
                                 Text("실제 검사실 당화혈색소가 아닌 참고용 추정치입니다.", color = Color.Gray, fontSize = 10.sp)
