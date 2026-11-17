@@ -162,7 +162,7 @@ private data class GlucoseMeasurementGroup(val source: String, val timestamp: Lo
 // 같은 기기에서 60초 이내 연속 측정한 혈당은 하나의 측정 묶음으로 계산합니다.
 private fun glucoseMeasurementGroups(records: List<VitalRecord>, maxGapMillis: Long = 60_000L): List<GlucoseMeasurementGroup> {
     val sorted = records.filter { it.type == "혈당" && it.value.toDoubleOrNull() != null }
-        .sortedBy { it.timestamp }
+        .sortedWith(compareBy<VitalRecord> { it.timestamp }.thenBy { it.source })
     val result = mutableListOf<GlucoseMeasurementGroup>()
     var currentSource: String? = null
     var current = mutableListOf<Pair<Long, Double>>()
@@ -177,7 +177,7 @@ private fun glucoseMeasurementGroups(records: List<VitalRecord>, maxGapMillis: L
         val value = record.value.toDoubleOrNull() ?: return@forEach
         val source = record.source.ifBlank { "기기 미지정" }
         val previousTime = current.lastOrNull()?.first
-        if (current.isNotEmpty() && record.timestamp - (previousTime ?: record.timestamp) > maxGapMillis) flush()
+        if (current.isNotEmpty() && (source != currentSource || record.timestamp - (previousTime ?: record.timestamp) > maxGapMillis)) flush()
         if (current.isEmpty()) currentSource = source
         current.add(record.timestamp to value)
     }
@@ -796,7 +796,7 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             Text(
                                                 timeWeightedA1cEstimate?.let {
-                                                    "측정 ${it.measurementCount}회 · 반영 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
+                                                    "측정 ${it.measurementCount}회 · 반영 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간 · 기간 ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.firstTimestamp))}~${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.lastTimestamp))}"
                                                 } ?: "기록량 부족 또는 긴 공백으로 추정 불가",
                                                 color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp
                                             )
@@ -995,7 +995,7 @@ fun EasyHealthApp(context: Context) {
                                 )
                                 Text(
                                     timeWeightedA1cEstimate?.let {
-                                        "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
+                                        "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간 · 기간 ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.firstTimestamp))}~${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.lastTimestamp))}"
                                     } ?: "측정 기록 수, 기간 또는 유효 시간 구간이 부족합니다.",
                                     color = Color.Gray, fontSize = 11.sp
                                 )
