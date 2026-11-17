@@ -47,6 +47,7 @@ class BluetoothRecordTransfer(private val context: Context) {
     @Volatile private var pendingSocket: BluetoothSocket? = null
     private val peers = linkedMapOf<String, TransferPeer>()
     private var receiverRegistered = false
+    @Volatile private var serverRunning = false
 
     private val discoveryReceiver = object : BroadcastReceiver() {
         @Suppress("DEPRECATION")
@@ -71,12 +72,16 @@ class BluetoothRecordTransfer(private val context: Context) {
     private fun has(permission: String): Boolean =
         Build.VERSION.SDK_INT < 31 || context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
-    private fun requireBluetoothPermissions() {
+    private fun requireBluetoothPermissions(
+        needsScan: Boolean = false,
+        needsConnect: Boolean = true,
+        needsAdvertise: Boolean = false
+    ) {
         if (Build.VERSION.SDK_INT >= 31 &&
-            (!has(Manifest.permission.BLUETOOTH_SCAN) ||
-             !has(Manifest.permission.BLUETOOTH_CONNECT) ||
-             !has(Manifest.permission.BLUETOOTH_ADVERTISE))) {
-            throw SecurityException("블루투스 검색·연결·기기 표시 권한이 필요합니다.")
+            ((needsScan && !has(Manifest.permission.BLUETOOTH_SCAN)) ||
+             (needsConnect && !has(Manifest.permission.BLUETOOTH_CONNECT)) ||
+             (needsAdvertise && !has(Manifest.permission.BLUETOOTH_ADVERTISE)))) {
+            throw SecurityException("블루투스 작업에 필요한 권한이 허용되지 않았습니다.")
         }
     }
 
@@ -84,7 +89,7 @@ class BluetoothRecordTransfer(private val context: Context) {
     fun startDiscovery(listener: Listener) {
         this.listener = listener
         try {
-            requireBluetoothPermissions()
+            requireBluetoothPermissions(needsScan = true, needsConnect = true)
             val a = adapter ?: throw IOException("이 기기는 블루투스를 지원하지 않습니다.")
             if (!a.isEnabled) throw IOException("휴대폰 블루투스를 켜 주세요.")
             if (!receiverRegistered) {
@@ -109,19 +114,23 @@ class BluetoothRecordTransfer(private val context: Context) {
     fun startServer(listener: Listener) {
         this.listener = listener
         try {
-            requireBluetoothPermissions()
+            requireBluetoothPermissions(needsConnect = true, needsAdvertise = true)
             val a = adapter ?: throw IOException("블루투스를 지원하지 않습니다.")
             if (!a.isEnabled) throw IOException("블루투스를 켜 주세요.")
-            listener.onStatus("수신 대기 중입니다. 상대 기기에서 이 기기를 선택해 주세요.")
+            try { server?.close() } catch (_: Exception) { }
+            serverRunning = true
+            listener.onStatus("수신 서버를 시작하고 있습니다.")
             executor.execute {
+                var socketServer: BluetoothServerSocket? = null
                 try {
-                    server?.close()
-                    val socketServer = a.listenUsingRfcommWithServiceRecord(SERVICE_NAME, SERVICE_UUID)
+                    socketServer = a.listenUsingRfcommWithServiceRecord(SERVICE_NAME, SERVICE_UUID)
                     server = socketServer
+                    listener.onStatus("수신 대기 중입니다. 상대 기기에서 이 기기를 선택해 주세요.")
                     val socket = socketServer.accept()
+                    serverRunning = false
                     pendingSocket = socket
-                    socketServer.close()
-                    server = null
+                    try { socketServer.close() } catch (_: Exception) { }
+                    if (server === socketServer) server = null
                     val input = DataInputStream(socket.inputStream)
                     val header = JSONObject(input.readUTF())
                     if (header.optString("kind") != "offer") throw IOException("전송 요청 형식이 올바르지 않습니다.")
@@ -132,12 +141,30 @@ class BluetoothRecordTransfer(private val context: Context) {
                     )
                     listener.onIncoming(offer)
                 } catch (e: Exception) {
-                    listener.onError(e.message ?: "수신 대기 중 오류가 발생했습니다.")
+                    if (serverRunning) listener.onError(e.message ?: "수신 대기 중 오류가 발생했습니다.")
+                    serverRunning = false
+                    try { socketServer?.close() } catch (_: Exception) { }
+                    if (server === socketServer) server = null
                 }
             }
         } catch (e: Exception) {
+            serverRunning = false
             listener.onError(e.message ?: "수신 대기를 시작하지 못했습니다.")
         }
+    }
+
+    fun cancelDiscovery() {
+        try { adapter?.cancelDiscovery() } catch (_: Exception) { }
+        listener?.onStatus("기기 검색을 취소했습니다.")
+    }
+
+    fun stopServer() {
+        serverRunning = false
+        try { server?.close() } catch (_: Exception) { }
+        server = null
+        try { pendingSocket?.close() } catch (_: Exception) { }
+        pendingSocket = null
+        listener?.onStatus("수신 대기를 취소했습니다.")
     }
 
     fun acceptIncoming(offer: TransferOffer) {
@@ -185,7 +212,7 @@ class BluetoothRecordTransfer(private val context: Context) {
         executor.execute {
             var socket: BluetoothSocket? = null
             try {
-                requireBluetoothPermissions()
+                requireBluetoothPermissions(needsScan = true, needsConnect = true)
                 adapter?.cancelDiscovery()
                 socket = peer.device.createRfcommSocketToServiceRecord(SERVICE_UUID)
                 socket.connect()
@@ -217,6 +244,7 @@ class BluetoothRecordTransfer(private val context: Context) {
 
     fun close() {
         try { adapter?.cancelDiscovery() } catch (_: Exception) { }
+        serverRunning = false
         try { server?.close() } catch (_: Exception) { }
         try { pendingSocket?.close() } catch (_: Exception) { }
         if (receiverRegistered) {
