@@ -529,6 +529,7 @@ fun EasyHealthApp(context: Context) {
                     transferServerActive = false
                     transferStartPending = false
                     discoverabilityRequestPending = false
+                    receiverServerStartRequested = false
                 }
             }
         }
@@ -577,7 +578,8 @@ fun EasyHealthApp(context: Context) {
             android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
         }
         Log.i("EasyHealthTransfer", "Discoverability ActivityResult callback entered; resultCode=${result.resultCode}, dataAction=${result.data?.action}, scanMode=$scanMode")
-        transferServerActive = false
+        // Do not reset transferServerActive here: the scan-mode broadcast may have
+        // started the RFCOMM server before this ActivityResult callback arrives.
         if (result.resultCode > 0) {
             startReceiverServerOnce("activity-result")
         } else {
@@ -671,6 +673,15 @@ fun EasyHealthApp(context: Context) {
         }
     }
     fun requestTransferPermissions() {
+        // Open the search surface before requesting permissions. If Android denies a permission
+        // or the tablet's permission flow differs, the user still sees the actionable search/error UI.
+        if (transferMode == "보내기") {
+            transferTarget = null
+            transferPeers = emptyList()
+            transferSearching = true
+            showTransferBluetoothSearch = true
+            transferStatus = "블루투스 권한을 확인하고 주변 기기를 검색합니다."
+        }
         val required = if (android.os.Build.VERSION.SDK_INT >= 31) {
             if (transferMode == "보내기")
                 arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
@@ -710,8 +721,22 @@ fun EasyHealthApp(context: Context) {
         }
     }.timeInMillis
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp in reportStart..now }
-    // 초기 화면과 건강 리포트는 동일한 최근 90일 시간 가중 추정 결과를 사용합니다.
+    // 초기 화면은 최근 90일 기준을 유지하고, 리포트는 선택한 기간만 별도로 계산합니다.
     val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
+    val reportGlucoseRecords = personRecords.filter { it.type == "혈당" && it.timestamp <= now }
+    val reportA1cWindowStart = if (reportPeriod == "전체") {
+        reportGlucoseRecords.minOfOrNull { it.timestamp } ?: now
+    } else reportStart
+    val reportWindowDuration = (now - reportA1cWindowStart).coerceAtLeast(0L)
+    val reportA1cEstimate = calculateTimeWeightedGlucoseEstimate(
+        records = reportGlucoseRecords,
+        nowMillis = now,
+        windowStartMillis = reportA1cWindowStart,
+        windowEndMillis = now,
+        // For a one-week report, require a meaningful multi-day span without making a full
+        // seven-day span mathematically mandatory. Longer reports retain the existing 7-day floor.
+        minimumSpanMillis = minOf(7L * 24L * 60L * 60L * 1000L, maxOf(24L * 60L * 60L * 1000L, reportWindowDuration / 2L))
+    )
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(
@@ -995,19 +1020,19 @@ fun EasyHealthApp(context: Context) {
                         "3개월" -> "현재부터 3개월 전까지"
                         else -> "전체 기록 기준"
                     }, color = Color.Gray, fontSize = 12.sp)
-                    if (reportEnabledTypes.contains("혈당")) {
+                    if (reportEnabledTypes.contains("혈당") || reportGlucoseRecords.isNotEmpty()) {
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("당화혈색소 앱 추정치 · 최근 90일", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("당화혈색소 앱 추정치 · ${reportPeriod}", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 Text(
-                                    timeWeightedA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "추정 불가",
-                                    color = timeWeightedA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
+                                    reportA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
+                                    color = reportA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
                                     fontSize = 24.sp, fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    timeWeightedA1cEstimate?.let {
+                                    reportA1cEstimate?.let {
                                         "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간 · 기간 ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.firstTimestamp))}~${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.lastTimestamp))}"
-                                    } ?: "측정 기록 수, 기간 또는 유효 시간 구간이 부족합니다.",
+                                    } ?: "선택한 기간의 측정 횟수, 측정 기간 또는 유효 시간 구간이 부족합니다.",
                                     color = Color.Gray, fontSize = 11.sp
                                 )
                                 Text("실제 검사실 당화혈색소가 아닌 참고용 추정치입니다.", color = Color.Gray, fontSize = 10.sp)
@@ -1158,11 +1183,8 @@ fun EasyHealthApp(context: Context) {
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 등록")
-                    }
                     if (registeredDevices.isEmpty()) {
-                        Text("등록된 기기가 없습니다. 기기 등록 버튼을 눌러 추가해 주세요.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))
+                        Text("등록된 기기가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))
                     } else {
                         devices.filter { it.first in registeredDevices }.forEach { device ->
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp),
@@ -1189,6 +1211,9 @@ fun EasyHealthApp(context: Context) {
                         Text("짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
                     Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
+                    Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 추가")
+                    }
                 }
             }
         }
