@@ -1263,6 +1263,68 @@ fun EasyHealthApp(context: Context) {
             }) { Text("삭제", color = Color.Red) } },
             dismissButton = { TextButton(onClick = { personDeleteTarget = null }) { Text("취소") } })
     }
+    if (showTransferDialog) {
+        AlertDialog(
+            onDismissRequest = { showTransferDialog = false },
+            title = { Text("기기 간 블루투스 전송") },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = transferMode == "보내기", onClick = { transferMode = "보내기" }, label = { Text("보내기") })
+                        FilterChip(selected = transferMode == "받기", onClick = { transferMode = "받기" }, label = { Text("받기") })
+                    }
+                    Text(transferStatus, color = Green, fontSize = 12.sp)
+                    if (transferMode == "보내기") {
+                        Text("사용자: " + transferPerson)
+                        people.forEach { p -> TextButton(onClick = { transferPerson = p }) { Text(p) } }
+                        Text("전송 기간")
+                        Row {
+                            TextButton(onClick = {
+                                val c = Calendar.getInstance().apply { timeInMillis = transferFrom }
+                                DatePickerDialog(context, { _, y, m, d -> transferFrom = Calendar.getInstance().apply { set(y, m, d, 0, 0, 0) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+                            }) { Text("시작 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferFrom))) }
+                            TextButton(onClick = {
+                                val c = Calendar.getInstance().apply { timeInMillis = transferTo }
+                                DatePickerDialog(context, { _, y, m, d -> transferTo = Calendar.getInstance().apply { set(y, m, d, 23, 59, 59) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+                            }) { Text("종료 " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(transferTo))) }
+                        }
+                        Text("주변 기기")
+                        transferPeers.forEach { peer ->
+                            TextButton(onClick = { transferTarget = peer }) { Text((if (transferTarget?.address == peer.address) "✓ " else "") + peer.name + " · " + peer.address) }
+                        }
+                        if (transferPeers.isEmpty()) Text("받는 기기에서 먼저 수신 대기를 시작한 후 검색해 주세요.", color = Color.Gray, fontSize = 11.sp)
+                    } else Text("수신 대기를 시작하면 상대 기기의 전송 요청을 앱에서 승인할 수 있습니다.")
+                    if (transferProgress > 0f) LinearProgressIndicator(progress = { transferProgress }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                if (transferMode == "보내기") {
+                    Row {
+                        TextButton(onClick = { requestTransferPermissions() }) { Text("기기 검색") }
+                        TextButton(onClick = {
+                            val selected = records.filter { it.person == transferPerson && it.timestamp in transferFrom..transferTo }
+                            when {
+                                transferFrom > transferTo -> transferStatus = "날짜 범위를 확인해 주세요."
+                                transferTarget == null -> transferStatus = "받는 기기를 선택해 주세요."
+                                selected.isEmpty() -> transferStatus = "선택 기간에 기록이 없습니다."
+                                else -> { transferProgress = 0f; recordTransfer.send(transferTarget!!, transferPerson, transferFrom, transferTo, encodeRecords(selected), selected.size) }
+                            }
+                        }) { Text("보내기") }
+                    }
+                } else TextButton(onClick = { requestTransferPermissions() }) { Text("수신 대기 시작") }
+            },
+            dismissButton = { TextButton(onClick = { showTransferDialog = false }) { Text("닫기") } }
+        )
+    }
+    transferOffer?.let { offer ->
+        AlertDialog(
+            onDismissRequest = { transferOffer = null; recordTransfer.rejectIncoming() },
+            title = { Text("데이터 수신 승인") },
+            text = { Text(offer.peerName + " 기기에서 " + offer.person + " 사용자 기록 " + offer.count + "건을 보내려고 합니다. 받으시겠습니까?") },
+            confirmButton = { TextButton(onClick = { transferOffer = null; recordTransfer.acceptIncoming(offer) }) { Text("승인") } },
+            dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } }
+        )
+    }
     if (showDeviceInfo) {
         val savedMeters = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
         AlertDialog(onDismissRequest = { showDeviceInfo = false }, title = { Text("블루투스 자동 가져오기") },
