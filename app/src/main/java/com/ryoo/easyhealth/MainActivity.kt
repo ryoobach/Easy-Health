@@ -393,6 +393,7 @@ fun EasyHealthApp(context: Context) {
     var transferTo by remember { mutableStateOf(System.currentTimeMillis()) }
     var showTransferPersonMenu by remember { mutableStateOf(false) }
     var showBluetoothSearch by remember { mutableStateOf(false) }
+    var showTransferBluetoothSearch by remember { mutableStateOf(false) }
     var transferSearching by remember { mutableStateOf(false) }
     var transferServerActive by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
@@ -524,7 +525,7 @@ fun EasyHealthApp(context: Context) {
             transferTarget = null
             transferPeers = emptyList()
             transferSearching = true
-            showBluetoothSearch = true
+            showTransferBluetoothSearch = true
             transferStatus = "주변 블루투스 기기를 검색하고 있습니다."
             recordTransfer.startDiscovery(transferListener)
         } else {
@@ -1316,7 +1317,7 @@ fun EasyHealthApp(context: Context) {
                 if (transferServerActive) recordTransfer.stopServer()
                 transferSearching = false
                 transferServerActive = false
-                showBluetoothSearch = false
+                showTransferBluetoothSearch = false
                 showTransferDialog = false
             },
             title = { Text("기기 간 블루투스 전송") },
@@ -1383,12 +1384,12 @@ fun EasyHealthApp(context: Context) {
             dismissButton = { TextButton(onClick = { transferOffer = null; recordTransfer.rejectIncoming() }) { Text("거절") } }
         )
     }
-    if (showBluetoothSearch) {
+    if (showTransferBluetoothSearch) {
         AlertDialog(
             onDismissRequest = {
                 if (transferSearching) recordTransfer.cancelDiscovery()
                 transferSearching = false
-                showBluetoothSearch = false
+                showTransferBluetoothSearch = false
             },
             title = { Text("블루투스 기기 검색") },
             text = {
@@ -1412,7 +1413,7 @@ fun EasyHealthApp(context: Context) {
                                     transferTarget = peer
                                     transferSearching = false
                                     recordTransfer.cancelDiscovery()
-                                    showBluetoothSearch = false
+                                    showTransferBluetoothSearch = false
                                     transferStatus = peer.name + " 기기를 선택했습니다. 보내기 버튼을 눌러 전송해 주세요."
                                 }
                             ) {
@@ -1437,7 +1438,7 @@ fun EasyHealthApp(context: Context) {
                 TextButton(onClick = {
                     if (transferSearching) recordTransfer.cancelDiscovery()
                     transferSearching = false
-                    showBluetoothSearch = false
+                    showTransferBluetoothSearch = false
                 }) { Text("취소") }
             }
         )
