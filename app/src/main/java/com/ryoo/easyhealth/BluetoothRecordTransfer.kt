@@ -122,16 +122,19 @@ class BluetoothRecordTransfer(private val context: Context) {
             listener.onStatus("수신 서버를 시작하고 있습니다.")
             executor.execute {
                 var socketServer: BluetoothServerSocket? = null
+                var socket: BluetoothSocket? = null
                 try {
                     socketServer = a.listenUsingRfcommWithServiceRecord(SERVICE_NAME, SERVICE_UUID)
                     server = socketServer
-                    listener.onStatus("수신 대기 중입니다. 상대 기기에서 이 기기를 선택해 주세요.")
-                    val socket = socketServer.accept()
-                    serverRunning = false
+                    listener.onStatus("수신 대기 중입니다. 보내는 기기에서 이 기기를 검색해 주세요.")
+                    socket = socketServer.accept()
                     pendingSocket = socket
+                    serverRunning = false
                     try { socketServer.close() } catch (_: Exception) { }
                     if (server === socketServer) server = null
+
                     val input = DataInputStream(socket.inputStream)
+                    val output = DataOutputStream(socket.outputStream)
                     val header = JSONObject(input.readUTF())
                     if (header.optString("kind") != "offer") throw IOException("전송 요청 형식이 올바르지 않습니다.")
                     val offer = TransferOffer(
@@ -139,12 +142,35 @@ class BluetoothRecordTransfer(private val context: Context) {
                         header.optString("person", "본인"),
                         header.optLong("from"), header.optLong("to"), header.optInt("count")
                     )
-                    listener.onIncoming(offer)
+
+                    // 연결된 상대 기기의 전송 요청을 자동 승인하고 곧바로 수신합니다.
+                    output.writeByte(1)
+                    output.flush()
+                    listener.onStatus(offer.peerName + " 기기와 연결되었습니다. 데이터를 수신하고 있습니다.")
+                    val size = input.readInt()
+                    if (size !in 1..MAX_BYTES) throw IOException("전송 데이터 크기가 올바르지 않습니다.")
+                    val bytes = ByteArray(size)
+                    var offset = 0
+                    while (offset < size) {
+                        val n = input.read(bytes, offset, minOf(8192, size - offset))
+                        if (n < 0) throw IOException("전송 도중 연결이 끊겼습니다.")
+                        offset += n
+                        listener.onProgress(offset, size)
+                    }
+                    val json = String(bytes, Charsets.UTF_8)
+                    JSONArray(json)
+                    listener.onReceived(json, offer)
+                    try { socket.close() } catch (_: Exception) { }
+                    if (pendingSocket === socket) pendingSocket = null
+                    listener.onStatus("데이터 수신이 완료되었습니다.")
                 } catch (e: Exception) {
                     if (serverRunning) listener.onError(e.message ?: "수신 대기 중 오류가 발생했습니다.")
+                    else if (socket != null) listener.onError(e.message ?: "데이터 수신에 실패했습니다.")
                     serverRunning = false
                     try { socketServer?.close() } catch (_: Exception) { }
+                    try { socket?.close() } catch (_: Exception) { }
                     if (server === socketServer) server = null
+                    if (pendingSocket === socket) pendingSocket = null
                 }
             }
         } catch (e: Exception) {
