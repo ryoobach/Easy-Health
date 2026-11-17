@@ -578,7 +578,8 @@ fun EasyHealthApp(context: Context) {
             android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
         }
         Log.i("EasyHealthTransfer", "Discoverability ActivityResult callback entered; resultCode=${result.resultCode}, dataAction=${result.data?.action}, scanMode=$scanMode")
-        transferServerActive = false
+        // Do not reset transferServerActive here: the scan-mode broadcast may have
+        // started the RFCOMM server before this ActivityResult callback arrives.
         if (result.resultCode > 0) {
             startReceiverServerOnce("activity-result")
         } else {
