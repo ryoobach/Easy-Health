@@ -893,8 +893,24 @@ fun EasyHealthApp(context: Context) {
                         OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                             Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(3.dp)); Text("블루투스 자동 가져오기", fontSize = 9.sp, lineHeight = 11.sp)
                         }
-                        OutlinedButton(onClick = { transferMode = "보내기"; showTransferDialog = true; transferStatus = "전송할 사용자와 기간을 선택해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 보내기", fontSize = 9.sp) }
-                        OutlinedButton(onClick = { transferMode = "가져오기"; showTransferDialog = true; transferStatus = "가져올 준비를 해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 가져오기", fontSize = 9.sp) }
+                        OutlinedButton(onClick = {
+                            transferMode = "보내기"
+                            transferTarget = null
+                            transferPeers = emptyList()
+                            transferProgress = 0f
+                            showTransferDialog = true
+                            transferStatus = "내보낼 사용자와 날짜 기간을 선택해 주세요."
+                        }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("내보내기", fontSize = 10.sp) }
+                        OutlinedButton(onClick = {
+                            transferMode = "가져오기"
+                            transferProgress = 0f
+                            transferServerActive = false
+                            transferStartPending = false
+                            discoverabilityRequestPending = false
+                            receiverServerStartRequested = false
+                            showTransferDialog = true
+                            transferStatus = "가져오기를 시작하려면 검색 허용 및 수신 대기를 눌러 주세요."
+                        }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("가져오기", fontSize = 10.sp) }
                     }
                     if (personRecords.isEmpty()) {
                         Text("이 대상자의 측정 기록이 없습니다.", color = Color.Gray, modifier = Modifier.padding(12.dp))
@@ -1460,15 +1476,23 @@ fun EasyHealthApp(context: Context) {
     if (showTransferDialog) {
         AlertDialog(
             onDismissRequest = {
-                if (transferSearching) recordTransfer.cancelDiscovery()
-                if (transferServerActive || transferMode == "가져오기") recordTransfer.stopServer()
-                transferSearching = false
-                transferServerActive = false
-                transferStartPending = false
-                discoverabilityRequestPending = false
-                receiverServerStartRequested = false
-                showTransferBluetoothSearch = false
-                showTransferDialog = false
+                // 수신 권한 요청 또는 대기 중에는 바깥 터치/뒤로 가기로 창이 닫히지 않게 합니다.
+                if (transferMode == "가져오기" &&
+                    (discoverabilityRequestPending || transferStartPending || transferServerActive)) {
+                    transferStatus = if (transferServerActive)
+                        "수신 대기 중입니다. 종료하려면 '닫기'를 눌러 주세요."
+                    else "블루투스 검색 허용 또는 수신 서버 준비가 진행 중입니다."
+                } else {
+                    if (transferSearching) recordTransfer.cancelDiscovery()
+                    if (transferServerActive) recordTransfer.stopServer()
+                    transferSearching = false
+                    transferServerActive = false
+                    transferStartPending = false
+                    discoverabilityRequestPending = false
+                    receiverServerStartRequested = false
+                    showTransferBluetoothSearch = false
+                    showTransferDialog = false
+                }
             },
             title = { Text(if (transferMode == "보내기") "데이터 내보내기" else "데이터 가져오기") },
             text = {
@@ -1522,24 +1546,29 @@ fun EasyHealthApp(context: Context) {
                     }) { Text("기기 검색") }
                 } else {
                     TextButton(onClick = {
-                        if (transferServerActive || transferStartPending) {
+                        if (transferServerActive || transferStartPending || discoverabilityRequestPending) {
                             recordTransfer.stopServer()
                             transferServerActive = false
                             transferStartPending = false
                             discoverabilityRequestPending = false
                             receiverServerStartRequested = false
-                        } else requestTransferPermissions()
-                    }) { Text(if (transferServerActive || transferStartPending) "수신 대기 취소" else "가져오기 시작") }
+                            transferStatus = "수신 대기를 취소했습니다."
+                        } else {
+                            transferProgress = 0f
+                            requestTransferPermissions()
+                        }
+                    }) { Text(if (transferServerActive || transferStartPending || discoverabilityRequestPending) "수신 대기 취소" else "검색 허용 및 수신 대기") }
                 }
             },
             dismissButton = { TextButton(onClick = {
                 if (transferSearching) recordTransfer.cancelDiscovery()
-                if (transferServerActive || transferMode == "가져오기") recordTransfer.stopServer()
+                if (transferServerActive || transferStartPending || transferMode == "가져오기") recordTransfer.stopServer()
                 transferSearching = false
                 transferServerActive = false
                 transferStartPending = false
                 discoverabilityRequestPending = false
                 receiverServerStartRequested = false
+                showTransferBluetoothSearch = false
                 showTransferDialog = false
             }) { Text("닫기") } }
         )
