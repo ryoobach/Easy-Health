@@ -450,19 +450,6 @@ fun EasyHealthApp(context: Context) {
         else bluetoothPermissionLauncher.launch(missing.toTypedArray())
     }
     DisposableEffect(Unit) { onDispose { bluetoothClient.close() } }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) try {
-            val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-            val array = JSONArray(raw); var imported = 0
-            for (i in 0 until array.length()) {
-                val o = array.getJSONObject(i)
-                val item = VitalRecord(o.optString("id", UUID.randomUUID().toString()), o.optString("person", selectedPerson), o.optString("type", "혈당"), o.optString("value", ""), o.optLong("timestamp"), o.optString("source", "가져오기"), o.optString("note", ""), o.optString("externalId", ""))
-                if (records.none { it.id == item.id || (it.person == item.person && it.type == item.type && it.timestamp == item.timestamp && it.value == item.value) }) { records.add(item); imported++ }
-            }
-            persistRecords(context, records)
-            android.widget.Toast.makeText(context, "${imported}건의 기록을 가져왔습니다.", android.widget.Toast.LENGTH_LONG).show()
-        } catch (_: Exception) { android.widget.Toast.makeText(context, "올바른 Easy Health JSON 파일이 아닙니다.", android.widget.Toast.LENGTH_LONG).show() }
-    }
     var showAppInfo by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
@@ -671,12 +658,8 @@ fun EasyHealthApp(context: Context) {
                         OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                             Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(3.dp)); Text("블루투스 자동 가져오기", fontSize = 9.sp, lineHeight = 11.sp)
                         }
-                        OutlinedButton(onClick = {
-                            val payload = encodeRecords(records)
-                            val send = Intent(Intent.ACTION_SEND).apply { type = "application/json"; putExtra(Intent.EXTRA_SUBJECT, "Easy Health 건강 기록"); putExtra(Intent.EXTRA_TEXT, payload) }
-                            context.startActivity(Intent.createChooser(send, "건강 기록 내보내기"))
-                        }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 내보내기", fontSize = 9.sp) }
-                        OutlinedButton(onClick = { importLauncher.launch("application/json") }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 가져오기", fontSize = 9.sp) }
+                        OutlinedButton(onClick = { transferMode = "보내기"; showTransferDialog = true; transferStatus = "전송할 사용자와 기간을 선택해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 보내기", fontSize = 9.sp) }
+                        OutlinedButton(onClick = { transferMode = "받기"; showTransferDialog = true; transferStatus = "받을 준비를 해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 받기", fontSize = 9.sp) }
                     }
                     if (personRecords.isEmpty()) {
                         Text("이 대상자의 측정 기록이 없습니다.", color = Color.Gray, modifier = Modifier.padding(12.dp))
