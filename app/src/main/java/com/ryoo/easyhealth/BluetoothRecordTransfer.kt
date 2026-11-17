@@ -49,12 +49,13 @@ class BluetoothRecordTransfer(private val context: Context) {
     private var receiverRegistered = false
 
     private val discoveryReceiver = object : BroadcastReceiver() {
+        @Suppress("DEPRECATION")
         override fun onReceive(ctx: Context?, intent: Intent?) {
             when (intent?.action) {
                 BluetoothDevice.ACTION_FOUND -> {
                     val device = if (Build.VERSION.SDK_INT >= 33)
                         intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-                    else @Suppress("DEPRECATION") (intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE))
+                    else intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                     device ?: return
                     val name = try { device.name ?: "이름 없는 기기" } catch (_: SecurityException) { "이름 없는 기기" }
                     synchronized(peers) {
