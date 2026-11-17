@@ -397,6 +397,9 @@ fun EasyHealthApp(context: Context) {
     var showTransferBluetoothSearch by remember { mutableStateOf(false) }
     var transferSearching by remember { mutableStateOf(false) }
     var transferServerActive by remember { mutableStateOf(false) }
+    var transferStartPending by remember { mutableStateOf(false) }
+    var discoverabilityRequestPending by remember { mutableStateOf(false) }
+    var receiverServerStartRequested by remember { mutableStateOf(false) }
     var bluetoothStatus by remember { mutableStateOf("측정기를 페어링 모드로 바꾼 뒤 검색해 주세요.") }
     var activeBluetoothName by remember { mutableStateOf("블루투스 측정기") }
     var bluetoothCandidates by remember { mutableStateOf<List<MeterCandidate>>(emptyList()) }
@@ -461,10 +464,17 @@ fun EasyHealthApp(context: Context) {
                     transferStatus = message
                     if (message.contains("검색이 끝났습니다") || message.contains("검색을 취소") ||
                         message.contains("검색을 시작하지 못") || message.contains("검색에 실패")) transferSearching = false
-                    if (message.contains("수신 서버를 시작") || message.contains("수신 대기 중")) transferServerActive = true
+                    if (message.contains("수신 서버를 시작")) transferStartPending = true
+                    if (message.contains("수신 대기 중")) {
+                        transferStartPending = false
+                        transferServerActive = true
+                    }
                     if (message.contains("전송이 완료") || message.contains("가져오기 완료") ||
                         message.contains("실패") || message.contains("오류") ||
-                        message.contains("수신 대기를 취소") || message.contains("허용이 취소")) transferServerActive = false
+                        message.contains("수신 대기를 취소") || message.contains("허용이 취소")) {
+                        transferServerActive = false
+                        transferStartPending = false
+                    }
                 }
             }
             override fun onPeers(peers: List<TransferPeer>) { onUi { transferPeers = peers } }
@@ -503,6 +513,8 @@ fun EasyHealthApp(context: Context) {
                         transferStatus = "가져오기 완료: 새 기록 " + imported + "건 · 중복 제외 " + duplicates + "건"
                         transferProgress = 1f
                         transferServerActive = false
+                        transferStartPending = false
+                        discoverabilityRequestPending = false
                         transferOffer = null
                     } catch (e: Exception) {
                         transferStatus = "가져온 데이터 처리 실패: " + (e.localizedMessage ?: "형식 오류")
@@ -511,30 +523,108 @@ fun EasyHealthApp(context: Context) {
             }
             override fun onError(message: String) {
                 Log.e("EasyHealthTransfer", "Transfer error: $message")
-                onUi { transferStatus = "오류: $message"; transferSearching = false; transferServerActive = false }
+                onUi {
+                    transferStatus = "오류: $message"
+                    transferSearching = false
+                    transferServerActive = false
+                    transferStartPending = false
+                    discoverabilityRequestPending = false
+                }
             }
         }
     }
+    fun startReceiverServerOnce(reason: String) {
+        if (!discoverabilityRequestPending) {
+            Log.w("EasyHealthTransfer", "Ignoring server start trigger outside a discoverability request; reason=$reason")
+            return
+        }
+        if (receiverServerStartRequested) {
+            Log.i("EasyHealthTransfer", "Duplicate server start trigger ignored; reason=$reason")
+            return
+        }
+        val connectGranted = android.os.Build.VERSION.SDK_INT < 31 ||
+            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val advertiseGranted = android.os.Build.VERSION.SDK_INT < 31 ||
+            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val scanMode = try {
+            (context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager).adapter?.scanMode
+                ?: android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+        } catch (e: Exception) {
+            Log.e("EasyHealthTransfer", "Unable to read Bluetooth scanMode at $reason", e)
+            android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+        }
+        Log.i("EasyHealthTransfer", "Receiver start trigger=$reason scanMode=$scanMode connectGranted=$connectGranted advertiseGranted=$advertiseGranted")
+        if (!connectGranted || !advertiseGranted) {
+            transferStatus = "기기 검색은 허용됐지만 블루투스 권한이 확인되지 않습니다. 앱 권한을 확인한 뒤 다시 시도해 주세요."
+            transferStartPending = false
+            discoverabilityRequestPending = false
+            Log.e("EasyHealthTransfer", "Bluetooth permission check failed: connect=$connectGranted advertise=$advertiseGranted")
+            return
+        }
+        receiverServerStartRequested = true
+        transferStartPending = true
+        transferStatus = "기기 검색 허용을 확인했습니다. RFCOMM 수신 서버를 시작하고 있습니다."
+        Log.i("EasyHealthTransfer", "Starting RFCOMM server once; trigger=$reason")
+        recordTransfer.startServer(transferListener)
+    }
+
     val discoverabilityLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        // Android returns the discoverable duration in seconds, or RESULT_CANCELED.
-        Log.i("EasyHealthTransfer", "Discoverability resultCode=${result.resultCode}")
+        val scanMode = try {
+            (context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager).adapter?.scanMode
+                ?: android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+        } catch (e: Exception) {
+            Log.e("EasyHealthTransfer", "Unable to read scanMode in ActivityResult callback", e)
+            android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+        }
+        Log.i("EasyHealthTransfer", "Discoverability ActivityResult callback entered; resultCode=${result.resultCode}, dataAction=${result.data?.action}, scanMode=$scanMode")
         transferServerActive = false
         if (result.resultCode > 0) {
-            val connectGranted = android.os.Build.VERSION.SDK_INT < 31 ||
-                context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            val advertiseGranted = android.os.Build.VERSION.SDK_INT < 31 ||
-                context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!connectGranted || !advertiseGranted) {
-                transferStatus = "기기 검색은 허용됐지만 블루투스 권한이 확인되지 않습니다. 앱 권한을 확인한 뒤 다시 시도해 주세요."
-                Log.e("EasyHealthTransfer", "Permission check after discoverability: connect=$connectGranted advertise=$advertiseGranted")
-            } else {
-                transferStatus = "기기 검색 허용 확인(${result.resultCode}초). 수신 서버 소켓을 생성하고 있습니다."
-                Log.i("EasyHealthTransfer", "Starting RFCOMM server after discoverability approval")
-                recordTransfer.startServer(transferListener)
-            }
+            startReceiverServerOnce("activity-result")
         } else {
             transferStatus = "기기 검색 허용이 취소되었거나 Android에서 요청을 완료하지 못했습니다. 다시 시도해 주세요."
-            Log.w("EasyHealthTransfer", "Discoverability denied/cancelled")
+            transferStartPending = false
+            discoverabilityRequestPending = false
+            receiverServerStartRequested = false
+            Log.w("EasyHealthTransfer", "Discoverability denied/cancelled; resultCode=${result.resultCode}, scanMode=$scanMode")
+        }
+    }
+
+    val discoverabilityReceiver = remember {
+        object : android.content.BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action != android.bluetooth.BluetoothAdapter.ACTION_SCAN_MODE_CHANGED) return
+                val scanMode = intent.getIntExtra(
+                    android.bluetooth.BluetoothAdapter.EXTRA_SCAN_MODE,
+                    android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+                )
+                val previousMode = intent.getIntExtra(
+                    android.bluetooth.BluetoothAdapter.EXTRA_PREVIOUS_SCAN_MODE,
+                    android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+                )
+                Log.i("EasyHealthTransfer", "ACTION_SCAN_MODE_CHANGED previous=$previousMode current=$scanMode pending=$discoverabilityRequestPending")
+                if (scanMode == android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE &&
+                    discoverabilityRequestPending) {
+                    startReceiverServerOnce("scan-mode-broadcast")
+                }
+            }
+        }
+    }
+    DisposableEffect(context, discoverabilityReceiver) {
+        val filter = android.content.IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                context.registerReceiver(discoverabilityReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(discoverabilityReceiver, filter)
+            }
+            Log.i("EasyHealthTransfer", "Registered ACTION_SCAN_MODE_CHANGED receiver")
+        } catch (e: Exception) {
+            Log.e("EasyHealthTransfer", "Failed to register scan-mode receiver", e)
+            transferStatus = "블루투스 상태 감시기를 등록하지 못했습니다: ${e.localizedMessage ?: e.javaClass.simpleName}"
+        }
+        onDispose {
+            try { context.unregisterReceiver(discoverabilityReceiver) } catch (_: Exception) { }
+            Log.i("EasyHealthTransfer", "Unregistered ACTION_SCAN_MODE_CHANGED receiver")
         }
     }
     fun startTransferAction() {
@@ -548,8 +638,11 @@ fun EasyHealthApp(context: Context) {
         } else {
             // Do not mark the server active until the RFCOMM socket is actually listening.
             transferServerActive = false
+            transferStartPending = false
+            discoverabilityRequestPending = true
+            receiverServerStartRequested = false
             transferStatus = "Android 기기 검색 허용을 기다리고 있습니다."
-            Log.i("EasyHealthTransfer", "Launching ACTION_REQUEST_DISCOVERABLE")
+            Log.i("EasyHealthTransfer", "Launching ACTION_REQUEST_DISCOVERABLE; scanMode will be checked by result and broadcast")
             val request = Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
                 .putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
             discoverabilityLauncher.launch(request)
@@ -560,6 +653,9 @@ fun EasyHealthApp(context: Context) {
         else {
             transferSearching = false
             transferServerActive = false
+            transferStartPending = false
+            discoverabilityRequestPending = false
+            receiverServerStartRequested = false
             transferStatus = "블루투스 작업에 필요한 권한이 거부되었습니다. 앱 권한 설정에서 허용해 주세요."
         }
     }
@@ -603,12 +699,8 @@ fun EasyHealthApp(context: Context) {
         }
     }.timeInMillis
     val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp in reportStart..now }
-    val glucoseValues = glucoseMeasurementGroups(periodRecords).map { it.average }
-    val averageGlucose = glucoseValues.takeIf { it.isNotEmpty() }?.average()
-    val latestGlucose = personRecords.firstOrNull { it.type == "혈당" }
-    val estimatedA1c = averageGlucose?.let { (it + 46.7) / 28.7 }
-    val homeGlucoseAverage = glucoseMeasurementGroups(personRecords.filter { it.timestamp >= now - 90L * 86400000L }).map { it.average }.takeIf { it.isNotEmpty() }?.average()
-    val homeEstimatedA1c = homeGlucoseAverage?.let { (it + 46.7) / 28.7 }
+    // 초기 화면과 건강 리포트는 동일한 최근 90일 시간 가중 추정 결과를 사용합니다.
+    val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(
@@ -699,10 +791,16 @@ fun EasyHealthApp(context: Context) {
                                             glucoseRecord?.let { Text(riskFor(it.type, it.value, selectedProfile).label, color = riskFor(it.type, it.value, selectedProfile).color, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }
                                             HorizontalDivider(color = Color(0xFFD5E8D9), thickness = 1.dp, modifier = Modifier.padding(vertical = 2.dp))
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Text("당화혈색소", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-                                                Text(homeEstimatedA1c?.let { String.format(Locale.KOREA, "%.1f%%", it) } ?: "--", color = homeEstimatedA1c?.let { riskFor("당화혈색소 추정치", it.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                                Text("당화혈색소 추정", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                                                Text(timeWeightedA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "--", color = timeWeightedA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                             }
-                                            Text("최근 90일 평균 혈당 기반 추정", color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp)
+                                            Text(
+                                                timeWeightedA1cEstimate?.let {
+                                                    "측정 ${it.measurementCount}회 · 반영 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
+                                                } ?: "기록량 부족 또는 긴 공백으로 추정 불가",
+                                                color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp
+                                            )
+                                            Text("최근 90일 시간 가중 추정 · 실제 검사값 아님", color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp)
                                         }
                                     }
                                 }
@@ -886,6 +984,25 @@ fun EasyHealthApp(context: Context) {
                         "3개월" -> "현재부터 3개월 전까지"
                         else -> "전체 기록 기준"
                     }, color = Color.Gray, fontSize = 12.sp)
+                    if (reportEnabledTypes.contains("혈당")) {
+                        Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("당화혈색소 앱 추정치 · 최근 90일", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(
+                                    timeWeightedA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "추정 불가",
+                                    color = timeWeightedA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
+                                    fontSize = 24.sp, fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    timeWeightedA1cEstimate?.let {
+                                        "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
+                                    } ?: "측정 기록 수, 기간 또는 유효 시간 구간이 부족합니다.",
+                                    color = Color.Gray, fontSize = 11.sp
+                                )
+                                Text("실제 검사실 당화혈색소가 아닌 참고용 추정치입니다.", color = Color.Gray, fontSize = 10.sp)
+                            }
+                        }
+                    }
                     if (reportVitalTypes.isEmpty()) {
                         Text("등록된 기기의 측정 기록이 쌓이면 여기에 표시됩니다.", color = Color.Gray)
                     } else {
@@ -1336,6 +1453,9 @@ fun EasyHealthApp(context: Context) {
                 if (transferServerActive || transferMode == "가져오기") recordTransfer.stopServer()
                 transferSearching = false
                 transferServerActive = false
+                transferStartPending = false
+                discoverabilityRequestPending = false
+                receiverServerStartRequested = false
                 showTransferBluetoothSearch = false
                 showTransferDialog = false
             },
@@ -1368,6 +1488,8 @@ fun EasyHealthApp(context: Context) {
                         Text(
                             if (transferServerActive && transferStatus.contains("수신 대기 중"))
                                 "다른 기기에서 이 기기를 검색할 수 있습니다. 보내는 기기에서 내보내기를 진행해 주세요."
+                            else if (transferStartPending)
+                                "수신 서버를 준비하고 있습니다. 서버가 실제 대기 상태가 될 때까지 이 화면을 유지해 주세요."
                             else if (transferServerActive)
                                 "가져오기 준비 중입니다. 이 화면을 유지해 주세요."
                             else "가져오기를 시작하면 다른 기기에서 이 기기를 검색할 수 있도록 허용한 뒤 자동으로 수신 대기합니다.",
@@ -1389,11 +1511,14 @@ fun EasyHealthApp(context: Context) {
                     }) { Text("기기 검색") }
                 } else {
                     TextButton(onClick = {
-                        if (transferServerActive) {
+                        if (transferServerActive || transferStartPending) {
                             recordTransfer.stopServer()
                             transferServerActive = false
+                            transferStartPending = false
+                            discoverabilityRequestPending = false
+                            receiverServerStartRequested = false
                         } else requestTransferPermissions()
-                    }) { Text(if (transferServerActive) "수신 대기 취소" else "가져오기 시작") }
+                    }) { Text(if (transferServerActive || transferStartPending) "수신 대기 취소" else "가져오기 시작") }
                 }
             },
             dismissButton = { TextButton(onClick = {
@@ -1401,6 +1526,9 @@ fun EasyHealthApp(context: Context) {
                 if (transferServerActive || transferMode == "가져오기") recordTransfer.stopServer()
                 transferSearching = false
                 transferServerActive = false
+                transferStartPending = false
+                discoverabilityRequestPending = false
+                receiverServerStartRequested = false
                 showTransferDialog = false
             }) { Text("닫기") } }
         )
