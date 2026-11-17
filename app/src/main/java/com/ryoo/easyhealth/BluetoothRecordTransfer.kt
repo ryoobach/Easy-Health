@@ -98,8 +98,14 @@ class BluetoothRecordTransfer(private val context: Context) {
                     addAction(BluetoothDevice.ACTION_FOUND)
                     addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
                 }
-                if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-                else context.registerReceiver(discoveryReceiver, filter)
+                if (Build.VERSION.SDK_INT >= 33) {
+                    // Bluetooth discovery broadcasts are delivered by the privileged Bluetooth
+                    // process, not necessarily the system UID. Export this receiver so ACTION_FOUND
+                    // and ACTION_DISCOVERY_FINISHED reach the app on Android 13+.
+                    context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
+                } else {
+                    context.registerReceiver(discoveryReceiver, filter)
+                }
                 receiverRegistered = true
             }
             synchronized(peers) { peers.clear() }
