@@ -1020,7 +1020,7 @@ fun EasyHealthApp(context: Context) {
                         "3개월" -> "현재부터 3개월 전까지"
                         else -> "전체 기록 기준"
                     }, color = Color.Gray, fontSize = 12.sp)
-                    if (reportEnabledTypes.contains("혈당")) {
+                    if (reportEnabledTypes.contains("혈당") || reportGlucoseRecords.isNotEmpty()) {
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("당화혈색소 앱 추정치 · ${reportPeriod}", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
