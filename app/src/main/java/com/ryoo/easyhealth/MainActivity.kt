@@ -1183,11 +1183,8 @@ fun EasyHealthApp(context: Context) {
                 }
                 else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 등록")
-                    }
                     if (registeredDevices.isEmpty()) {
-                        Text("등록된 기기가 없습니다. 기기 등록 버튼을 눌러 추가해 주세요.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))
+                        Text("등록된 기기가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))
                     } else {
                         devices.filter { it.first in registeredDevices }.forEach { device ->
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp),
@@ -1214,6 +1211,9 @@ fun EasyHealthApp(context: Context) {
                         Text("짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
                     Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
+                    Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 추가")
+                    }
                 }
             }
         }
