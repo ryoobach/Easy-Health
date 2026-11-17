@@ -10,8 +10,8 @@ android {
         applicationId = "com.ryoo.easyhealth"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.27"
+        versionCode = 28
+        versionName = "1.28"
     }
     // Always sign every debug APK with the same cached key. This prevents
     // Android from treating each downloaded build as a different app.
