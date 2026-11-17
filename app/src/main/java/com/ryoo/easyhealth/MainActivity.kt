@@ -37,6 +37,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MedicalServices
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material3.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.platform.LocalContext
@@ -528,7 +533,20 @@ fun EasyHealthApp(context: Context) {
                 NavigationBar(containerColor = Color.White) {
                     listOf("기록", "리포트", "병원 일정", "기기 설정").forEach { name ->
                         NavigationBarItem(selected = tab == name, onClick = { tab = name },
-                            icon = { Icon(when (name) { "기록" -> Icons.Default.MonitorHeart; "병원 일정" -> Icons.Default.Home; else -> Icons.Default.Favorite }, null) },
+                            icon = {
+                                when (name) {
+                                    "기록" -> Icon(Icons.Default.MonitorHeart, contentDescription = "기록")
+                                    "리포트" -> Icon(Icons.Default.Assessment, contentDescription = "리포트")
+                                    "병원 일정" -> Box(Modifier.size(24.dp)) {
+                                        Icon(Icons.Default.CalendarMonth, contentDescription = "병원 일정", modifier = Modifier.align(Alignment.Center))
+                                        Icon(Icons.Default.MedicalServices, contentDescription = null, modifier = Modifier.align(Alignment.BottomEnd).size(11.dp))
+                                    }
+                                    else -> Box(Modifier.size(24.dp)) {
+                                        Icon(Icons.Default.Settings, contentDescription = "기기 설정", modifier = Modifier.align(Alignment.Center))
+                                        Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.align(Alignment.BottomEnd).size(11.dp))
+                                    }
+                                }
+                            },
                             label = { Text(name) })
                     }
                 }
