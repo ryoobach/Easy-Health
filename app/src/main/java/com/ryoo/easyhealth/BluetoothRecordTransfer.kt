@@ -116,7 +116,7 @@ class BluetoothRecordTransfer(private val context: Context) {
     fun startServer(listener: Listener) {
         this.listener = listener
         try {
-            requireBluetoothPermissions(needsConnect = true, needsAdvertise = true)
+            requireBluetoothPermissions(needsConnect = true)
             val a = adapter ?: throw IOException("블루투스를 지원하지 않습니다.")
             if (!a.isEnabled) throw IOException("블루투스가 꺼져 있습니다.")
             if (serverRunning) {
