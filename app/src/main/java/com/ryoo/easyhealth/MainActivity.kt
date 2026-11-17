@@ -672,6 +672,15 @@ fun EasyHealthApp(context: Context) {
         }
     }
     fun requestTransferPermissions() {
+        // Open the search surface before requesting permissions. If Android denies a permission
+        // or the tablet's permission flow differs, the user still sees the actionable search/error UI.
+        if (transferMode == "보내기") {
+            transferTarget = null
+            transferPeers = emptyList()
+            transferSearching = true
+            showTransferBluetoothSearch = true
+            transferStatus = "블루투스 권한을 확인하고 주변 기기를 검색합니다."
+        }
         val required = if (android.os.Build.VERSION.SDK_INT >= 31) {
             if (transferMode == "보내기")
                 arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
