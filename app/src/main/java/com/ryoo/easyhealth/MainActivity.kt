@@ -593,7 +593,7 @@ fun EasyHealthApp(context: Context) {
         object : android.content.BroadcastReceiver() {
             override fun onReceive(receiverContext: Context?, intent: Intent?) {
                 if (intent?.action != android.bluetooth.BluetoothAdapter.ACTION_SCAN_MODE_CHANGED) return
-                val scanMode = intent.getIntExtra(
+                val announcedScanMode = intent.getIntExtra(
                     android.bluetooth.BluetoothAdapter.EXTRA_SCAN_MODE,
                     android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
                 )
@@ -601,8 +601,18 @@ fun EasyHealthApp(context: Context) {
                     android.bluetooth.BluetoothAdapter.EXTRA_PREVIOUS_SCAN_MODE,
                     android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
                 )
-                Log.i("EasyHealthTransfer", "ACTION_SCAN_MODE_CHANGED previous=$previousMode current=$scanMode pending=$discoverabilityRequestPending")
-                if (scanMode == android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE &&
+                val actualScanMode = try {
+                    (context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager).adapter?.scanMode
+                        ?: android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+                } catch (e: Exception) {
+                    Log.e("EasyHealthTransfer", "Unable to verify adapter scanMode from broadcast", e)
+                    android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE
+                }
+                Log.i("EasyHealthTransfer", "ACTION_SCAN_MODE_CHANGED previous=$previousMode announced=$announcedScanMode actual=$actualScanMode pending=$discoverabilityRequestPending")
+                // The receiver is exported so Android's privileged Bluetooth process can reach it.
+                // Verify the adapter's real state as well, so a spoofed broadcast cannot start the server.
+                if (announcedScanMode == android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE &&
+                    actualScanMode == android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE &&
                     discoverabilityRequestPending) {
                     startReceiverServerOnce("scan-mode-broadcast")
                 }
@@ -613,7 +623,8 @@ fun EasyHealthApp(context: Context) {
         val filter = android.content.IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
         try {
             if (android.os.Build.VERSION.SDK_INT >= 33) {
-                context.registerReceiver(discoverabilityReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                // Bluetooth broadcasts can originate from a privileged Bluetooth app UID.
+                context.registerReceiver(discoverabilityReceiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 context.registerReceiver(discoverabilityReceiver, filter)
             }
