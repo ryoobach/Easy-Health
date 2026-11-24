@@ -74,6 +74,8 @@ private val units = mapOf("혈당" to "mg/dL", "케톤" to "mmol/L", "혈압" to
 private val devices = listOf(
     "Contour Plus ONE" to listOf("혈당"),
     "CareSens Dual" to listOf("혈당", "케톤"),
+    "OMRON HEM-7140T1" to listOf("혈압"),
+    "CAS BFA-S12" to listOf("체중", "체지방률", "골격근량", "BMI"),
     "혈압계" to listOf("혈압"),
     "체중계" to listOf("체중", "체지방률", "골격근량", "BMI"),
     "체온계" to listOf("체온"),
@@ -95,7 +97,7 @@ data class VitalRecord(
 
 
 
-private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null, val wakeTime: String = "", val breakfastTime: String = "", val lunchTime: String = "", val dinnerTime: String = "", val bedtime: String = "")
+private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null, val wakeTime: String = "", val breakfastTime: String = "", val lunchTime: String = "", val dinnerTime: String = "", val bedtime: String = "", val weightKg: Double? = null)
 
 private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
     val array = JSONArray()
@@ -103,7 +105,7 @@ private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
         array.put(JSONObject().put("name", p.name).put("sex", p.sex)
             .put("age", p.age ?: JSONObject.NULL).put("heightCm", p.heightCm ?: JSONObject.NULL)
             .put("wakeTime", p.wakeTime).put("breakfastTime", p.breakfastTime).put("lunchTime", p.lunchTime)
-            .put("dinnerTime", p.dinnerTime).put("bedtime", p.bedtime))
+            .put("dinnerTime", p.dinnerTime).put("bedtime", p.bedtime).put("weightKg", p.weightKg ?: JSONObject.NULL))
     }
     return array.toString()
 }
@@ -338,7 +340,8 @@ fun EasyHealthApp(context: Context) {
                         if (o.isNull("age")) null else o.optInt("age"),
                         if (o.isNull("heightCm")) null else o.optDouble("heightCm"),
                         o.optString("wakeTime", ""), o.optString("breakfastTime", ""), o.optString("lunchTime", ""),
-                        o.optString("dinnerTime", ""), o.optString("bedtime", "")))
+                        o.optString("dinnerTime", ""), o.optString("bedtime", ""),
+                        if (o.isNull("weightKg")) null else o.optDouble("weightKg")))
                 }
             } catch (_: Exception) { }
             people.forEach { if (!containsKey(it)) put(it, PersonProfile(it)) }
@@ -1002,7 +1005,7 @@ fun EasyHealthApp(context: Context) {
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
+                    Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"} · ${selectedProfile.weightKg?.let { "${it}kg" } ?: "기준 체중 미입력"}", color = Color.Gray, fontSize = 11.sp)
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
@@ -1208,10 +1211,10 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
-                        Text("짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
+                        Text(if (device.first == "OMRON HEM-7140T1" || device.first == "CAS BFA-S12") "블루투스 기기 등록됨 · Easy Health 직접 자동 수신은 통신 규격 검증 후 지원됩니다." else "짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
                     }
                     Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
-                    Button(onClick = { showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { registerSelections.clear(); showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 추가")
                     }
                 }
@@ -1223,6 +1226,8 @@ fun EasyHealthApp(context: Context) {
     if (deviceHelpTarget != null) {
         val helpName = deviceHelpTarget!!
         val helpText = when (helpName) {
+            "OMRON HEM-7140T1" -> "오므론 혈압계입니다. 이 버전에서는 기기 등록과 혈압 기록 항목을 준비했습니다. Easy Health 직접 자동 수신은 BLE 데이터 규격 검증이 끝난 뒤 지원합니다.\n\n현재는 자동 수신을 지원한다고 표시하지 않습니다."
+            "CAS BFA-S12" -> "CAS 체성분 체중계입니다. 이 버전에서는 기기 등록과 체중·체성분 기록 항목을 준비했습니다. Easy Health 직접 자동 수신은 BLE 데이터 규격 검증이 끝난 뒤 지원합니다.\n\n현재는 자동 수신을 지원한다고 표시하지 않습니다."
             "Contour Plus ONE" -> "1. 측정기 전원을 끕니다.\n2. OK 버튼을 길게 눌러 블루투스 표시가 깜박이도록 합니다.\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\n4. 검색된 Contour Plus ONE을 선택해 연결합니다."
             "CareSens Dual" -> "1. 측정기에서 S 버튼을 약 3초 누릅니다.\n2. YES → BT → PAIR 순서로 선택합니다.\n3. Easy Health에서 기기 등록 → 블루투스 기기 찾기를 누릅니다.\n4. 검색된 CareSens 기기를 선택하고 측정기 화면의 PIN 안내에 따라 연결합니다."
             else -> "1. 측정기를 켜고 블루투스 페어링 모드로 설정합니다.\n2. 휴대폰 설정의 블루투스에서 기기를 검색해 등록합니다.\n3. Easy Health의 기기 등록에서 해당 측정 항목을 활성화합니다.\n4. 자동 가져오기는 기기별 데이터 전송 방식이 지원되는 경우에 사용할 수 있습니다."
@@ -1232,14 +1237,46 @@ fun EasyHealthApp(context: Context) {
             confirmButton = { TextButton(onClick = { deviceHelpTarget = null }) { Text("확인") } })
     }
     if (showRegisterDeviceDialog) {
-        AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 등록") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Contour Plus ONE: 전원을 끄고 OK 버튼을 파란 불이 깜박일 때까지 길게 누르세요. CareSens Dual: S 버튼을 3초 누르고 YES → BT → PAIR를 선택하세요. 측정기 화면의 PIN이 휴대폰에 표시되면 확인해 주세요.", color = Color.Gray, fontSize = 12.sp)
-                Button(onClick = { showBluetoothSearch = true; requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("블루투스 기기 찾기")
+        val addableDevices = listOf("OMRON HEM-7140T1", "CAS BFA-S12", "Contour Plus ONE", "CareSens Dual")
+        AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 추가") },
+            text = { Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("추가할 측정 기기를 선택해 주세요.", color = Ink, fontSize = 13.sp)
+                addableDevices.forEach { model ->
+                    Row(Modifier.fillMaxWidth().clickable {
+                        if (registerSelections.contains(model)) registerSelections.remove(model) else registerSelections.add(model)
+                    }.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = registerSelections.contains(model), onCheckedChange = { checked ->
+                            if (checked && !registerSelections.contains(model)) registerSelections.add(model)
+                            if (!checked) registerSelections.remove(model)
+                        })
+                        Column(Modifier.weight(1f)) {
+                            Text(model, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text(when (model) {
+                                "OMRON HEM-7140T1" -> "혈압 · 맥박"
+                                "CAS BFA-S12" -> "체중 · 체지방률 · 골격근량 · BMI"
+                                "Contour Plus ONE" -> "혈당 · 블루투스 기록 가져오기"
+                                else -> "혈당 · 케톤 · 블루투스 기록 가져오기"
+                            }, color = Color.Gray, fontSize = 11.sp)
+                        }
+                    }
+                }
+                Divider()
+                Text("혈당계는 아래 검색 기능으로 블루투스 연결을 진행합니다. 오므론 혈압계와 CAS 체중계는 이번 버전에서 기기 등록·기록 항목 구성을 지원하며, 직접 자동 수신은 제조사별 통신 규격 확인 후 활성화합니다.", color = Color.Gray, fontSize = 11.sp)
+                OutlinedButton(onClick = { showBluetoothSearch = true; requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("혈당계 블루투스 검색")
                 }
             } },
-            confirmButton = { TextButton(onClick = { showRegisterDeviceDialog = false }) { Text("닫기") } })
+            confirmButton = { TextButton(onClick = {
+                registerSelections.forEach { model ->
+                    if (!registeredDevices.contains(model)) registeredDevices.add(model)
+                    if (!enabledDevices.contains(model)) enabledDevices.add(model)
+                }
+                prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
+                    .putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
+                registerSelections.clear()
+                showRegisterDeviceDialog = false
+            }, enabled = registerSelections.isNotEmpty()) { Text("선택 기기 추가") } },
+            dismissButton = { TextButton(onClick = { registerSelections.clear(); showRegisterDeviceDialog = false }) { Text("취소") } })
     }
     if (showBluetoothSearch) {
         AlertDialog(onDismissRequest = { bluetoothClient.stopScan(); showBluetoothSearch = false }, title = { Text("블루투스 기기 찾기") },
@@ -1426,7 +1463,7 @@ fun EasyHealthApp(context: Context) {
                                         selectedPerson = person; prefs.edit().putString("selected_person", person).apply(); showPeopleDialog = false
                                     }) {
                                         Text(person, color = Ink, fontWeight = FontWeight.SemiBold)
-                                        Text(listOf(profile.sex, profile.age?.let { "${it}세" }, profile.heightCm?.let { "${it}cm" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "추가 정보 없음" }, color = Color.Gray, fontSize = 11.sp)
+                                        Text(listOf(profile.sex, profile.age?.let { "${it}세" }, profile.heightCm?.let { "${it}cm" }, profile.weightKg?.let { "${it}kg" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "추가 정보 없음" }, color = Color.Gray, fontSize = 11.sp)
                                     }
                                     TextButton(onClick = { personEditing = profile; showPeopleDialog = false }) { Text("수정") }
                                     TextButton(onClick = { personDeleteTarget = person; showPeopleDialog = false }, enabled = people.size > 1) { Text("삭제", color = Color.Red) }
@@ -1686,6 +1723,7 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
     var sex by remember(existing) { mutableStateOf(existing.sex) }
     var age by remember(existing) { mutableStateOf(existing.age?.toString() ?: "") }
     var height by remember(existing) { mutableStateOf(existing.heightCm?.toString() ?: "") }
+    var weight by remember(existing) { mutableStateOf(existing.weightKg?.toString() ?: "") }
     var wakeTime by remember(existing) { mutableStateOf(existing.wakeTime) }
     var breakfastTime by remember(existing) { mutableStateOf(existing.breakfastTime) }
     var lunchTime by remember(existing) { mutableStateOf(existing.lunchTime) }
@@ -1707,6 +1745,8 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = height, onValueChange = { height = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("키 (cm)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = weight, onValueChange = { weight = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("최초 기준 체중 (kg)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("생활 시간", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 ProfileTimeRow("기상 시간", wakeTime) { wakeTime = it }
                 ProfileTimeRow("아침 식사 시간", breakfastTime) { breakfastTime = it }
@@ -1714,15 +1754,16 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                 ProfileTimeRow("저녁 식사 시간", dinnerTime) { dinnerTime = it }
                 ProfileTimeRow("취침 시간", bedtime) { bedtime = it }
                 Text("입력한 식사 기준시간보다 이르면 식전, 지나면 식후로 표시합니다. 기상 후 아침 식사 전 구간은 공복으로, 취침시간 전후 1시간은 취침전으로 표시합니다.", color = Color.Gray, fontSize = 10.sp)
-                Text("키를 입력하면 체중 기록에서 BMI를 계산해 위험 참고 색상에 반영합니다. 성별과 나이는 개인별 리포트 해석에 활용합니다.", color = Color.Gray, fontSize = 11.sp)
+                Text("키와 최초 기준 체중은 개인별 건강 변화 분석에 사용합니다. 성별과 나이는 개인별 리포트 해석에 활용합니다.", color = Color.Gray, fontSize = 11.sp)
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val a = age.toIntOrNull()
                 val h = height.toDoubleOrNull()
-                if (name.trim().isNotBlank() && (age.isBlank() || a in 0..120) && (height.isBlank() || (h != null && h in 30.0..250.0))) {
-                    onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime))
+                val w = weight.toDoubleOrNull()
+                if (name.trim().isNotBlank() && (age.isBlank() || a in 0..120) && (height.isBlank() || (h != null && h in 30.0..250.0)) && (weight.isBlank() || (w != null && w in 20.0..400.0))) {
+                    onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime, w))
                 }
             }) { Text("저장") }
         },
