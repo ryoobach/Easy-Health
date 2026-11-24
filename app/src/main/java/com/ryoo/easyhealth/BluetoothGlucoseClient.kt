@@ -215,28 +215,46 @@ class BluetoothGlucoseClient(private val context: Context) {
 
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             val bytes = characteristic.value ?: return
-            if (characteristic.uuid == MEASUREMENT) parseMeasurement(bytes)?.let { reading ->
+            handleCharacteristicChanged(characteristic, bytes)
+        }
+
+        // Android 13+ supplies the notification payload directly in this callback.
+        // Handle both callback forms so the newest measurement is not lost on newer Android versions.
+        override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            handleCharacteristicChanged(characteristic, value)
+        }
+    }
+
+    private fun handleCharacteristicChanged(characteristic: BluetoothGattCharacteristic, bytes: ByteArray) {
+        if (characteristic.uuid == MEASUREMENT) {
+            parseMeasurement(bytes)?.let { reading ->
                 synchronized(pending) {
                     pending.removeAll { it.sequence == reading.sequence }
                     pending.add(if (ketoneSequences.contains(reading.sequence)) reading.copy(type = "케톤", value = (reading.value.toDoubleOrNull()?.div(10.0)?.toString() ?: reading.value)) else reading)
                 }
-            } else if (characteristic.uuid == CONTEXT) {
-                parseContext(bytes)?.let { contextInfo ->
-                    synchronized(pending) {
-                        if (contextInfo.second) {
-                            ketoneSequences.add(contextInfo.first)
-                            val index = pending.indexOfFirst { it.sequence == contextInfo.first }
-                            if (index >= 0) pending[index] = pending[index].copy(type = "케톤", value = (pending[index].value.toDoubleOrNull()?.div(10.0)?.toString() ?: pending[index].value))
-                        }
+            }
+        } else if (characteristic.uuid == CONTEXT) {
+            parseContext(bytes)?.let { contextInfo ->
+                synchronized(pending) {
+                    if (contextInfo.second) {
+                        ketoneSequences.add(contextInfo.first)
+                        val index = pending.indexOfFirst { it.sequence == contextInfo.first }
+                        if (index >= 0) pending[index] = pending[index].copy(type = "케톤", value = (pending[index].value.toDoubleOrNull()?.div(10.0)?.toString() ?: pending[index].value))
                     }
                 }
-            } else if (characteristic.uuid == RACP && bytes.size >= 2 && bytes[0].toInt() == 6) {
-                val result = synchronized(pending) { pending.toList() }
-                handler.post {
-                    if (result.isEmpty()) listener?.onStatus("가져올 새 측정 기록이 없습니다.")
-                    else listener?.onReadings(result)
-                }
             }
+        } else if (characteristic.uuid == RACP && bytes.size >= 2 && (bytes[0].toInt() and 0xff) == 6) {
+            // RACP response code: wait briefly after completion so a final measurement/context
+            // notification queued by the meter is processed before taking the import snapshot.
+            if (bytes.size >= 4 && (bytes[3].toInt() and 0xff) != 1) {
+                handler.post { listener?.onError("측정기에서 저장 기록 전송을 완료하지 못했습니다. RACP 응답을 확인해 주세요.") }
+                return
+            }
+            handler.postDelayed({
+                val result = synchronized(pending) { pending.toList().sortedBy { it.timestamp } }
+                if (result.isEmpty()) listener?.onStatus("가져올 새 측정 기록이 없습니다.")
+                else listener?.onReadings(result)
+            }, 300L)
         }
     }
 
