@@ -711,6 +711,7 @@ fun EasyHealthApp(context: Context) {
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
     var reportPeriod by remember { mutableStateOf((prefs.getString("last_report_period", "1개월") ?: "1개월").let { when (it) { "월간" -> "1개월"; "분기별" -> "3개월"; else -> it } }) }
+    val vitalReportPeriods = remember { mutableStateMapOf<String, String>() }
     var selectedReportVital by remember { mutableStateOf(prefs.getString("last_report_vital", "혈당") ?: "혈당") }
     var deviceHelpTarget by remember { mutableStateOf<String?>(null) }
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
@@ -1017,6 +1018,7 @@ fun EasyHealthApp(context: Context) {
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
+                    Text("당화혈색소 추정치 기간", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                     ScrollableTabRow(selectedTabIndex = listOf("1주일", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
                         listOf("1주일", "1개월", "3개월", "전체").forEach { label ->
                             Tab(selected = reportPeriod == label, onClick = {
@@ -1055,19 +1057,33 @@ fun EasyHealthApp(context: Context) {
                     } else {
                         // 바이탈별로 그래프와 요약만 표시합니다. 상세 측정 목록은 첫 화면과 중복되므로 제외합니다.
                         reportVitalTypes.forEach { vital ->
-                            val vitalRows = periodRecords.filter { it.type == vital }.sortedBy { it.timestamp }
+                            val vitalPeriod = vitalReportPeriods[vital] ?: reportPeriod
+                            val vitalStart = Calendar.getInstance().apply {
+                                timeInMillis = now
+                                when (vitalPeriod) {
+                                    "1주일" -> add(Calendar.DAY_OF_YEAR, -7)
+                                    "1개월" -> add(Calendar.MONTH, -1)
+                                    "3개월" -> add(Calendar.MONTH, -3)
+                                }
+                            }.timeInMillis
+                            val vitalRows = reportRecords.filter { it.type == vital && (vitalPeriod == "전체" || it.timestamp in vitalStart..now) }.sortedBy { it.timestamp }
                             val graphRows = vitalRows.mapNotNull { row ->
                                 val number = if (vital == "혈압") row.value.substringBefore("/").toDoubleOrNull() else row.value.toDoubleOrNull()
                                 number?.let { row to it }
                             }
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(vital + " 측정 추이 · 총 " + vitalRows.size + "회", color = Ink, fontWeight = FontWeight.SemiBold)
+                                    Text(vital + " 측정 추이 · " + vitalPeriod + " · 총 " + vitalRows.size + "회", color = Ink, fontWeight = FontWeight.SemiBold)
+                                    ScrollableTabRow(selectedTabIndex = listOf("1주일", "1개월", "3개월", "전체").indexOf(vitalPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
+                                        listOf("1주일", "1개월", "3개월", "전체").forEach { label ->
+                                            Tab(selected = vitalPeriod == label, onClick = { vitalReportPeriods[vital] = label }, text = { Text(label, fontSize = 11.sp) })
+                                        }
+                                    }
                                     if (graphRows.isEmpty()) {
                                         Text("그래프로 표시할 숫자 측정값이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                     } else {
                                         Text("Y축 · 측정값 (" + (units[vital]?.ifBlank { "단위 없음" } ?: "측정값") + ")     X축 · 측정 날짜", color = Color.Gray, fontSize = 10.sp)
-                                        val graphCanvasWidth = when (reportPeriod) {
+                                        val graphCanvasWidth = when (vitalPeriod) {
                                             "전체" -> maxOf(360.dp, (graphRows.size * 2.5f).dp)
                                             "3개월" -> maxOf(360.dp, (graphRows.size * 5).dp)
                                             "1개월" -> maxOf(420.dp, (graphRows.size * 8).dp)
@@ -1085,7 +1101,7 @@ fun EasyHealthApp(context: Context) {
                                             val right = size.width - 8.dp.toPx()
                                             val top = 8.dp.toPx()
                                             val bottom = size.height - 27.dp.toPx()
-                                            val graphStart = if (reportPeriod == "전체") graphRows.first().first.timestamp else reportStart
+                                            val graphStart = if (vitalPeriod == "전체") graphRows.first().first.timestamp else vitalStart
                                             val graphEnd = now.coerceAtLeast(graphStart + 1L)
                                             fun xFor(index: Int): Float {
                                                 val timestamp = graphRows[index].first.timestamp
@@ -1108,7 +1124,7 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             val points = graphRows.mapIndexed { index, pair -> Offset(xFor(index), yFor(pair.second.coerceIn(minV, maxV))) }
                                             for (i in 0 until points.lastIndex) drawLine(Color.Gray.copy(alpha = 0.65f), points[i], points[i + 1], strokeWidth = 1.5.dp.toPx())
-                                            points.forEachIndexed { index, point -> drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = if (reportPeriod == "전체" || reportPeriod == "3개월") 2.3.dp.toPx() else 3.dp.toPx(), center = point) }
+                                            points.forEachIndexed { index, point -> drawCircle(riskFor(vital, graphRows[index].first.value, selectedProfile).color, radius = if (vitalPeriod == "전체" || vitalPeriod == "3개월") 2.3.dp.toPx() else 3.dp.toPx(), center = point) }
                                             val datePaint = android.graphics.Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 9.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER }
                                             listOf(0, graphRows.size / 2, graphRows.lastIndex).distinct().forEach { index ->
                                                 val date = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(graphRows[index].first.timestamp))
@@ -1140,12 +1156,12 @@ fun EasyHealthApp(context: Context) {
                                         Text("전체 평균 ${String.format(Locale.KOREA, "%.1f", overallAverage)} mg/dL", color = riskFor(vital, overallAverage.toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                         Text("기간별 평균 · 같은 시간대의 연속 측정은 한 번으로 묶어 계산", color = Ink, fontSize = 11.sp)
                                         val glucoseChunkRanges = mutableListOf<Pair<Long, Long>>()
-                                        if (reportPeriod == "1개월") {
+                                        if (vitalPeriod == "1개월") {
                                             for (index in 0 until 4) {
                                                 val end = now - index * 7L * 86400000L
                                                 glucoseChunkRanges.add((end - 7L * 86400000L) to end)
                                             }
-                                        } else if (reportPeriod == "3개월") {
+                                        } else if (vitalPeriod == "3개월") {
                                             val endCalendar = Calendar.getInstance().apply { timeInMillis = now }
                                             for (index in 0 until 3) {
                                                 val end = endCalendar.timeInMillis
@@ -1153,7 +1169,7 @@ fun EasyHealthApp(context: Context) {
                                                 glucoseChunkRanges.add(startCalendar.timeInMillis to end)
                                                 endCalendar.add(Calendar.MONTH, -1)
                                             }
-                                        } else if (reportPeriod == "전체") {
+                                        } else if (vitalPeriod == "전체") {
                                             val firstTimestamp = vitalRows.minOf { it.timestamp }
                                             val endCalendar = Calendar.getInstance().apply { timeInMillis = now }
                                             while (true) {
