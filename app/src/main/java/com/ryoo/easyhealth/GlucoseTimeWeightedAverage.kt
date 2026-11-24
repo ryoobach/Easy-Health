@@ -28,15 +28,19 @@ internal fun calculateTimeWeightedGlucoseEstimate(
     maxGapMillis: Long = 6L * 60L * 60L * 1000L,
     minimumMeasurements: Int = 14,
     minimumSpanMillis: Long = 7L * 24L * 60L * 60L * 1000L,
-    minimumCoveredMillis: Long = 24L * 60L * 60L * 1000L
+    minimumCoveredMillis: Long = 24L * 60L * 60L * 1000L,
+    windowStartMillis: Long? = null,
+    windowEndMillis: Long = nowMillis
 ): TimeWeightedGlucoseEstimate? {
     require(lookbackDays > 0)
     require(maxGapMillis > 0L)
-    val windowStart = nowMillis - lookbackDays.toLong() * 24L * 60L * 60L * 1000L
+    val windowStart = windowStartMillis ?: (nowMillis - lookbackDays.toLong() * 24L * 60L * 60L * 1000L)
+    require(windowStart <= windowEndMillis)
 
-    // Remove exact duplicates, but retain simultaneous values from different meters.
+    // A caller may provide an explicit report interval; otherwise use the rolling lookback.
+    // Readings outside the selected interval must not contribute to its estimate.
     val uniqueReadings = records.asSequence()
-        .filter { it.type == "혈당" && it.timestamp in windowStart..nowMillis }
+        .filter { it.type == "혈당" && it.timestamp in windowStart..windowEndMillis }
         .mapNotNull { record ->
             val value = record.value.trim().toDoubleOrNull()
             if (value == null || !value.isFinite() || value <= 0.0) null
