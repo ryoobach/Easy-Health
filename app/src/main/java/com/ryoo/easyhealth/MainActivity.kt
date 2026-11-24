@@ -1211,7 +1211,7 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
-                        Text(if (device.first == "OMRON HEM-7140T1" || device.first == "CAS BFA-S12") "블루투스 기기 등록됨 · Easy Health 직접 자동 수신은 통신 규격 검증 후 지원됩니다." else "짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
+                        Text("짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다. 오므론·CAS 기기는 등록 후 직접 자동 수신 규격을 별도로 검증합니다.", color = Color.Gray, fontSize = 11.sp)
                     }
                     Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                     Button(onClick = { registerSelections.clear(); showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
@@ -1260,7 +1260,7 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                 }
-                Divider()
+                HorizontalDivider()
                 Text("혈당계는 아래 검색 기능으로 블루투스 연결을 진행합니다. 오므론 혈압계와 CAS 체중계는 이번 버전에서 기기 등록·기록 항목 구성을 지원하며, 직접 자동 수신은 제조사별 통신 규격 확인 후 활성화합니다.", color = Color.Gray, fontSize = 11.sp)
                 OutlinedButton(onClick = { showBluetoothSearch = true; requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("혈당계 블루투스 검색")
