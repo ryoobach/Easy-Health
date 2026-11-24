@@ -431,17 +431,25 @@ fun EasyHealthApp(context: Context) {
             }
             override fun onReadings(readings: List<MeterReading>) {
                 var imported = 0
-                readings.forEach { reading ->
+                readings.sortedBy { it.timestamp }.forEach { reading ->
                     val deviceName = activeBluetoothName
                     val externalId = "$deviceName:${reading.sequence}:${reading.timestamp}"
-                    if (records.none { it.externalId == externalId }) {
+                    if (records.none { it.person == selectedPerson && it.externalId == externalId }) {
                         records.add(VitalRecord(UUID.randomUUID().toString(), selectedPerson, reading.type,
                             reading.value, reading.timestamp, deviceName, "", externalId))
                         imported++
                     }
                 }
                 persistRecords(context, records)
-                bluetoothStatus = "${imported}건의 측정 기록을 가져왔습니다."
+                val latest = readings.maxByOrNull { it.timestamp }
+                val latestSaved = latest?.let { reading ->
+                    val externalId = "$activeBluetoothName:${reading.sequence}:${reading.timestamp}"
+                    records.any { it.person == selectedPerson && it.externalId == externalId }
+                } ?: false
+                val latestLabel = latest?.let {
+                    "${it.value} · ${SimpleDateFormat("MM.dd HH:mm", Locale.KOREA).format(Date(it.timestamp))}"
+                } ?: "없음"
+                bluetoothStatus = "기기 기록 ${readings.size}건 확인 · 신규 ${imported}건 저장 · 최신값 ${latestLabel} · 마지막 기록 ${if (latestSaved) "저장 확인" else "확인 필요"}"
                 android.widget.Toast.makeText(context, bluetoothStatus, android.widget.Toast.LENGTH_LONG).show()
             }
             override fun onError(message: String) { bluetoothStatus = message }
