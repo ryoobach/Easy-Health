@@ -31,3 +31,8 @@
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 빌드 대기 | 리포트의 당화혈색소 추정치 카드에 "혈당측정을 많이 할수록 당화혈색소 추정치가 정확합니다." 안내 문구 추가. source commit: 761ef284. |
 
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 수정·빌드 대기 | 당화혈색소 추정치 카드에 혈당 측정 횟수 안내 문구 추가. 이전 날짜 타임라인 빌드 실패 원인인 `combinedClickable` 실험 API 미옵트인도 `HospitalCalendar`에 명시적 `@OptIn`으로 수정. source commits: 761ef284, 78feeca4. |
+
+
+| 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 성공 | 최종 CI run 45562672552 성공. 단위 테스트·APK 빌드·패키지/버전·테스트 서명 검증 및 artifact 업로드 완료. artifact 14998463498. 상세: [2026-11-25-v1.39-test-build.md](2026-11-25-v1.39-test-build.md) |
+
+| 2026-11-25 | 1.40 TEST | `feature/v1.40-vitals-device-registration` | 빌드 대기 | versionName 1.40 / versionCode 40 / test package `com.ryoo.easyhealth.test140`. 날짜 한 번 누르기로 입력 액션 표시, 세 버튼 라벨 공백 제거 및 글꼴 축소. 당화혈색소 8개 시간대·최근 30일 개인별 식사 패턴 보완은 설계 제안으로 기록하며, 검증 전 계산 로직에는 반영하지 않음. 상세: [2026-11-25-v1.40-test-build.md](2026-11-25-v1.40-test-build.md) |
