@@ -2,12 +2,14 @@
 
 | 날짜 | 버전 | 브랜치 | 결과 | 요약 |
 |---|---|---|---|---|
-| 2026-11-25 | 1.38 | `feature/v1.38-vitals-device-registration` | 실패 | 기존 Android 서명키 캐시를 복원하지 못해 안전장치에서 빌드 중단. 마지막 접근 후 기본 7일 만료 정책에 걸렸을 가능성이 높음. 상세: [2026-11-25-v1.38-signing-key-cache-miss.md](2026-11-25-v1.38-signing-key-cache-miss.md) |
+| 2026-11-25 | 1.38 production | `feature/v1.38-vitals-device-registration` | 차단 | 기존 production 서명키 캐시를 복원하지 못해 안전장치에서 중단. 기존 1.37 앱의 업데이트 호환성을 위해 production signing guard 유지. 상세: [2026-11-25-v1.38-signing-key-cache-miss.md](2026-11-25-v1.38-signing-key-cache-miss.md) |
+| 2026-11-25 | 1.38 TEST | `feature/v1.38-vitals-device-registration` | 진행 중 | 기존 1.37을 보존하는 별도 package ID `com.ryoo.easyhealth.test` 테스트 APK. 단위 테스트와 APK 생성·서명 검증 성공 기록 및 최종 실행 추적: [2026-11-25-v1.38-feature-test-build.md](2026-11-25-v1.38-feature-test-build.md) |
 
 ## 재개 시 우선 확인
-- 1.38 소스 변경은 feature 브랜치에 보존되어 있습니다.
-- 기존 설치본(1.37)의 업데이트 호환성을 지키기 위해 기존 서명키 복구가 선행되어야 합니다.
-- 서명키가 확인되기 전에는 새 키로 빌드하거나 기존 앱을 교체하지 않습니다.
+- 1.38 source and UI changes are preserved on the feature branch.
+- The production package `com.ryoo.easyhealth` and installed 1.37 app remain untouched.
+- The separate test package `com.ryoo.easyhealth.test` is used for 1.38 validation; it does not share app data with 1.37.
+- Do not replace the production app with a differently signed APK.
 
 
 ## 2026-11-25 — Signing-key recovery investigation
