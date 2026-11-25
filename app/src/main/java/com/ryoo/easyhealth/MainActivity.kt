@@ -1059,12 +1059,16 @@ fun EasyHealthApp(context: Context) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${selectedAppointmentDate} 새 기록 입력", color = Ink, fontWeight = FontWeight.Bold)
-                                Button(onClick = { appointmentInitialDate = selectedAppointmentDate; editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                                    Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("병원 예약 등록")
-                                }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(onClick = { dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) { Text("건강 일기") }
-                                    OutlinedButton(onClick = { dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) { Text("간단 메모") }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(onClick = { appointmentInitialDate = selectedAppointmentDate; editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.weight(1f)) {
+                                        Text("병원 예약", maxLines = 1, softWrap = false)
+                                    }
+                                    OutlinedButton(onClick = { dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) {
+                                        Text("건강일기", maxLines = 1, softWrap = false)
+                                    }
+                                    OutlinedButton(onClick = { dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) {
+                                        Text("간단메모", maxLines = 1, softWrap = false)
+                                    }
                                 }
                             }
                         }
