@@ -21,3 +21,5 @@
 - Workflow now ignores documentation-only pushes and pull requests to avoid repeated, pointless Android build attempts from log/guideline edits.
 
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 진행 중 | 1.39/versionCode 39로 승격, 앱 정보창을 가이드 3행 구조로 수정하고 build_standard의 실제 공동 아이콘 `js_logo.png`를 CI에서 포함하도록 구성. 상세: [2026-11-25-v1.39-test-build.md](2026-11-25-v1.39-test-build.md) |
+
+| 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 진행 중 | 리포트 당화혈색소 추정 기간을 최근 3개월로 고정하고, 일정·일기에서 날짜 길게 누르기 입력 메뉴 및 시간순 통합 기록 박스를 구현. 상세: [2026-11-25-v1.39-test-build.md](2026-11-25-v1.39-test-build.md) |
