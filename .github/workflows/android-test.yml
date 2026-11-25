@@ -83,3 +83,5 @@ jobs:
         with:
           name: Easy-Health-1.41-Test
           path: "Easy-Health-1.41-Test/*"
+
+# 1.41 workflow path and package identity are version-checked above.
