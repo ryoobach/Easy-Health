@@ -1523,12 +1523,32 @@ fun EasyHealthApp(context: Context) {
     if (showAppInfo) {
         Dialog(onDismissRequest = { showAppInfo = false }) {
             Surface(shape = RoundedCornerShape(22.dp), color = Color.White) {
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 26.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Image(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher), contentDescription = "Easy Health 앱 아이콘", modifier = Modifier.size(76.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("Easy Health", color = Ink, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-                        Text("버전 ${BuildConfig.VERSION_NAME}", color = Color.Gray, fontSize = 12.sp)
-                        Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp)
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // 1행: 앱 아이콘 + 앱 이름 + 버전
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Image(
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_launcher),
+                            contentDescription = "Easy Health 앱 아이콘",
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Easy Health", color = Ink, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                            Text("버전 ${BuildConfig.VERSION_NAME}", color = Color.Gray, fontSize = 13.sp)
+                        }
+                    }
+                    // 2행: 실제 빌드 날짜
+                    Text("개발 날짜: ${BuildConfig.BUILD_DATE}", color = Color.Gray, fontSize = 12.sp)
+                    // 3행: build_standard 저장소의 공동 아이콘 + 제작자 표기
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Image(
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.js_logo),
+                            contentDescription = "Ryoo Jaesang과 최피디 공동 아이콘",
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Text("Ryoo Jaesang & 최피디", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
