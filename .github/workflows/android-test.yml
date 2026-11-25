@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: easy-health-test-apk
+  group: easy-health-test-apk-v139
   cancel-in-progress: false
 jobs:
   build-test:
