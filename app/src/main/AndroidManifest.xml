@@ -7,8 +7,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:label="Easy Health" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:label="Easy Health" android:exported="true">
+    <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:label="${appLabel}" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".MainActivity" android:label="${appLabel}" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
