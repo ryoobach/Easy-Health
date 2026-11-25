@@ -442,6 +442,7 @@ fun EasyHealthApp(context: Context) {
     var dailyEntryKind by remember { mutableStateOf("건강 일기") }
     var dailyEntryDeleteTarget by remember { mutableStateOf<DailyEntry?>(null) }
     var selectedAppointmentDate by remember { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date())) }
+    var showDateEntryActions by remember { mutableStateOf(false) }
     var appointmentInitialDate by remember { mutableStateOf<String?>(null) }
     var appointmentDeleteTarget by remember { mutableStateOf<HospitalAppointment?>(null) }
     var showRecordDialog by remember { mutableStateOf(false) }
@@ -1053,69 +1054,65 @@ fun EasyHealthApp(context: Context) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("날짜를 선택하면 해당 날짜의 병원 예약, 건강 일기, 간단 메모를 함께 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
                     val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
-                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = markedDates, onDateSelected = { selectedAppointmentDate = it })
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("새 기록 등록", color = Ink, fontWeight = FontWeight.Bold)
-                            Button(onClick = {
-                                appointmentInitialDate = selectedAppointmentDate
-                                editingAppointment = null
-                                showAppointmentDialog = true
-                            }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("병원 예약 등록")
-                            }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = {
-                                    dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true
-                                }, modifier = Modifier.weight(1f)) { Text("건강 일기") }
-                                OutlinedButton(onClick = {
-                                    dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true
-                                }, modifier = Modifier.weight(1f)) { Text("간단 메모") }
+                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = markedDates, onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = false }, onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true })
+                    if (showDateEntryActions) {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("${selectedAppointmentDate} 새 기록 입력", color = Ink, fontWeight = FontWeight.Bold)
+                                Button(onClick = { appointmentInitialDate = selectedAppointmentDate; editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("병원 예약 등록")
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = { dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) { Text("건강 일기") }
+                                    OutlinedButton(onClick = { dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) { Text("간단 메모") }
+                                }
                             }
                         }
                     }
                     Text("${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    val dayAppointments = appointments.filter { it.date == selectedAppointmentDate }.sortedBy { it.time }
-                    val dayEntries = dailyEntries.filter { it.date == selectedAppointmentDate }.sortedBy { it.time }
-                    if (dayAppointments.isEmpty() && dayEntries.isEmpty()) {
-                        Text("이 날짜에 등록된 기록이 없습니다. 위에서 새 기록을 등록해 주세요.", color = Color.Gray, fontSize = 12.sp)
+                    // 병원 예약과 일기/메모를 하나의 시간순 타임라인으로 표시합니다.
+                    val dayAppointments = appointments.filter { it.date == selectedAppointmentDate }
+                    val dayEntries = dailyEntries.filter { it.date == selectedAppointmentDate }
+                    data class DayTimelineItem(val time: String, val appointment: HospitalAppointment? = null, val entry: DailyEntry? = null)
+                    val dayTimeline = (dayAppointments.map { DayTimelineItem(it.time, appointment = it) } +
+                        dayEntries.map { DayTimelineItem(it.time, entry = it) }).sortedBy { it.time }
+                    if (dayTimeline.isEmpty()) {
+                        Text("이 날짜에 등록된 기록이 없습니다. 날짜를 길게 눌러 새 기록을 입력할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
-                    dayAppointments.forEach { a ->
-                        Card(modifier = Modifier.fillMaxWidth().clickable {
-                            editingAppointment = a; appointmentInitialDate = selectedAppointmentDate; showAppointmentDialog = true
-                        }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.weight(1f))
-                                    Text("확인", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    dayTimeline.forEach { item ->
+                        item.appointment?.let { a ->
+                            Card(modifier = Modifier.fillMaxWidth().clickable {
+                                editingAppointment = a; appointmentInitialDate = selectedAppointmentDate; showAppointmentDialog = true
+                            }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.weight(1f)); Text(a.time, color = Color.Gray, fontSize = 11.sp)
+                                    }
+                                    Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
+                                    Text(a.memo.ifBlank { "진료 내용 미입력" }, color = Color.Gray, fontSize = 12.sp)
+                                    Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
                                 }
-                                Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
-                                Text("${a.time} · ${a.memo.ifBlank { "진료 내용 미입력" }}", color = Color.Gray, fontSize = 12.sp)
-                                Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
+                            }
+                        }
+                        item.entry?.let { entry ->
+                            Card(modifier = Modifier.fillMaxWidth().clickable {
+                                editingDailyEntry = entry; dailyEntryKind = entry.kind; showDailyEntryDialog = true
+                            }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.weight(1f)); Text(entry.time, color = Color.Gray, fontSize = 11.sp)
+                                    }
+                                    if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
+                                    Text(entry.body, color = Color.Gray, fontSize = 12.sp)
+                                    if (entry.reminderMinutes != null) Text("알림 설정됨", color = Color.Gray, fontSize = 10.sp)
+                                }
                             }
                         }
                     }
-                    dayEntries.forEach { entry ->
-                        Card(modifier = Modifier.fillMaxWidth().clickable {
-                            editingDailyEntry = entry; dailyEntryKind = entry.kind; showDailyEntryDialog = true
-                        }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.weight(1f))
-                                    Text(entry.time, color = Color.Gray, fontSize = 11.sp)
-                                }
-                                if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
-                                Text(entry.body, color = Color.Gray, fontSize = 12.sp)
-                                if (entry.kind == "간단 메모" && entry.reminderMinutes != null) Text("알림 설정됨", color = Green, fontSize = 10.sp)
-                            }
-                        }
-                    }
-                    if (dayAppointments.isNotEmpty() || dayEntries.isNotEmpty()) {
-                        Text("기존 기록 박스를 누르면 수정할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
-                    }
-                }
+                    if (dayTimeline.isNotEmpty()) Text("기록 박스를 누르면 수정할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
+
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
@@ -2094,7 +2091,7 @@ private fun RecordDialog(
 }
 
 @Composable
-private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onDateSelected: (String) -> Unit) {
+private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onDateSelected: (String) -> Unit, onDateLongPressed: (String) -> Unit) {
     val monthCalendar = remember(selectedDate) {
         java.util.Calendar.getInstance().apply {
             try { time = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(selectedDate) ?: Date() } catch (_: Exception) { }
@@ -2139,7 +2136,7 @@ private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onD
                             val selected = date == selectedDate
                             Box(Modifier.weight(1f).aspectRatio(1f).padding(2.dp)
                                 .background(when { selected -> Color(0xFFB7DCC2); marked -> Color(0xFFE5F2E8); else -> Color.Transparent }, RoundedCornerShape(9.dp))
-                                .clickable { onDateSelected(date) }, contentAlignment = Alignment.Center) {
+                                .combinedClickable(onClick = { onDateSelected(date) }, onLongClick = { onDateLongPressed(date) }), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text(dayNumber.toString(), color = if (weekday == 6) Color(0xFFD16B6B) else Ink, fontSize = 12.sp, fontWeight = if (selected || marked) FontWeight.Bold else FontWeight.Normal)
                                     if (marked) Box(Modifier.size(4.dp).background(Green, RoundedCornerShape(50)))
@@ -2149,7 +2146,7 @@ private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onD
                     }
                 }
             }
-            Text("연한 초록색 날짜는 일정 또는 진료 기록이 있는 날입니다.", color = Color.Gray, fontSize = 10.sp)
+            Text("날짜를 누르면 선택, 길게 누르면 새 기록 입력 메뉴가 열립니다. 연한 초록색은 기록이 있는 날입니다.", color = Color.Gray, fontSize = 10.sp)
         }
     }
 }
