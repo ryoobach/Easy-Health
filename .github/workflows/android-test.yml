@@ -59,7 +59,7 @@ jobs:
           echo "Version code: $VERSION_CODE"
           echo "Version name: $VERSION_NAME"
           test "$APP_ID" = "com.ryoo.easyhealth.test140"
-          test "$VERSION_CODE" = "39"
+          test "$VERSION_CODE" = "40"
           test "$VERSION_NAME" = "1.40"
           "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.40 TEST'
       - name: Verify isolated test signature
