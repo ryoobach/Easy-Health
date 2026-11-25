@@ -1871,14 +1871,17 @@ fun EasyHealthApp(context: Context) {
                     if (savedMeters.length() == 0) Text("먼저 기기 설정에서 측정기를 등록해 주세요.")
                     for (i in 0 until savedMeters.length()) {
                         val item = savedMeters.optJSONObject(i) ?: continue
-                        Card(Modifier.fillMaxWidth().clickable {
-                            bluetoothStatus = "${item.optString("model")} 연결 중입니다."
+                        val model = item.optString("model")
+                        val automaticImportSupported = model == "Contour Plus ONE" || model == "CareSens Dual"
+                        Card(Modifier.fillMaxWidth().then(if (automaticImportSupported) Modifier.clickable {
+                            bluetoothStatus = "${model} 연결 중입니다."
                             bluetoothClient.connectAddress(item.optString("name"), item.optString("address"), bluetoothListener)
-                        }) {
+                        } else Modifier)) {
                             Column(Modifier.padding(10.dp)) {
-                                Text(item.optString("model"), color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(model, color = Ink, fontWeight = FontWeight.SemiBold)
                                 Text(item.optString("name"), color = Color.Gray, fontSize = 11.sp)
-                                Text("눌러서 측정 기록 가져오기", color = Green, fontSize = 11.sp)
+                                Text(if (automaticImportSupported) "눌러서 측정 기록 가져오기" else "직접 자동 가져오기 준비 중 · 수동 기록 가능",
+                                    color = if (automaticImportSupported) Green else Color.Gray, fontSize = 11.sp)
                             }
                         }
                     }
@@ -1926,7 +1929,7 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                         FilterChip(selected = sex == option, onClick = { sex = if (option == "선택 안 함") "" else option }, label = { Text(option, fontSize = 12.sp) })
                     }
                 }
-                OutlinedTextField(value = age, onValueChange = { age = it.filter(Char::isDigit).take(3) }, label = { Text("나이 (세)") },
+                OutlinedTextField(value = age, onValueChange = { age = it.filter(Char::isDigit).take(3) }, label = { Text("나이 (만 나이)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = height, onValueChange = { height = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("키 (cm)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -1944,7 +1947,7 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
             TextButton(onClick = {
                 val a = age.toIntOrNull()
                 val h = height.toDoubleOrNull()
-                if (name.trim().isNotBlank() && sex in listOf("남성", "여성") && a in 1..120 && h != null && h in 100.0..250.0) {
+                if (name.trim().isNotBlank() && sex in listOf("남성", "여성") && a != null && a in 1..120 && h != null && h in 100.0..250.0) {
                     onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime))
                 }
             }) { Text("저장") }
