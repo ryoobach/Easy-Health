@@ -25,4 +25,5 @@
 - The isolated test workflow runs unit tests, assembles the debug APK, verifies application ID/version, verifies the test signing certificate, packages the APK and installation guide, and uploads the artifact.
 - Test application ID: `com.ryoo.easyhealth.test`; version code: `38`; version name: `1.38`; launcher label: `Easy Health 1.38 TEST`.
 - The existing production package `com.ryoo.easyhealth` at version 1.37 is not modified or replaced by this isolated test build.
+- Latest isolated test build completed successfully in GitHub Actions run `45552681894`; artifact `Easy-Health-1.38-Test` was uploaded.
 - CI cannot verify physical Bluetooth transfers; Contour Plus ONE and CareSens Dual still require real-device pairing/import validation on the phone.
