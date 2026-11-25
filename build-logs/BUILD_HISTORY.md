@@ -29,3 +29,5 @@
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 수정·빌드 대기 | 일정·일기 기록을 날짜별 그룹으로 통합하고 최신 날짜순(내림차순) 표시. 같은 날짜의 병원 예약·건강일기·간단메모는 시간순으로 나열하며 기존 수정 기능 유지. 직전 run 45561957926의 Kotlin 컴파일 실패(일정·일기 when 분기 닫는 중괄호 누락)도 함께 수정. source commit: 2aaf1146. |
 
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 빌드 대기 | 리포트의 당화혈색소 추정치 카드에 "혈당측정을 많이 할수록 당화혈색소 추정치가 정확합니다." 안내 문구 추가. source commit: 761ef284. |
+
+| 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 수정·빌드 대기 | 당화혈색소 추정치 카드에 혈당 측정 횟수 안내 문구 추가. 이전 날짜 타임라인 빌드 실패 원인인 `combinedClickable` 실험 API 미옵트인도 `HospitalCalendar`에 명시적 `@OptIn`으로 수정. source commits: 761ef284, 78feeca4. |
