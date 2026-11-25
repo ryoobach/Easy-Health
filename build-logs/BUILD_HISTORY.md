@@ -35,4 +35,4 @@
 
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 성공 | 최종 CI run 45562672552 성공. 단위 테스트·APK 빌드·패키지/버전·테스트 서명 검증 및 artifact 업로드 완료. artifact 14998463498. 상세: [2026-11-25-v1.39-test-build.md](2026-11-25-v1.39-test-build.md) |
 
-| 2026-11-25 | 1.40 TEST | `feature/v1.40-vitals-device-registration` | 빌드 대기 | versionName 1.40 / versionCode 40 / test package `com.ryoo.easyhealth.test140`. 날짜 한 번 누르기로 입력 액션 표시, 세 버튼 라벨 공백 제거 및 글꼴 축소. 당화혈색소 8개 시간대·최근 30일 개인별 식사 패턴 보완은 설계 제안으로 기록하며, 검증 전 계산 로직에는 반영하지 않음. 상세: [2026-11-25-v1.40-test-build.md](2026-11-25-v1.40-test-build.md) |
+| 2026-11-25 | 1.40 TEST | `feature/v1.40-vitals-device-registration` | CI 진행 중 | versionName 1.40 / versionCode 40 / test package `com.ryoo.easyhealth.test140`. 날짜 한 번 누르기로 입력 액션 표시, 세 버튼 라벨 공백 제거 및 글꼴 축소. Actions run 45569505787 진행 중. 당화혈색소 8개 시간대·최근 30일 개인별 식사 패턴 보완은 설계 제안으로 기록하며, 검증 전 계산 로직에는 반영하지 않음. 상세: [2026-11-25-v1.40-test-build.md](2026-11-25-v1.40-test-build.md) |
