@@ -99,6 +99,9 @@ data class VitalRecord(
 
 private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null, val wakeTime: String = "", val breakfastTime: String = "", val lunchTime: String = "", val dinnerTime: String = "", val bedtime: String = "")
 
+private fun hasRequiredProfile(profile: PersonProfile): Boolean =
+    profile.sex in listOf("남성", "여성") && profile.age != null && profile.age in 1..120 && profile.heightCm != null && profile.heightCm in 100.0..250.0
+
 private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
     val array = JSONArray()
     profiles.values.forEach { p ->
@@ -782,6 +785,12 @@ fun EasyHealthApp(context: Context) {
     var showHelpDialog by remember { mutableStateOf(false) }
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
+    LaunchedEffect(selectedPerson, showOwnerSetup) {
+        if (!showOwnerSetup) {
+            val profile = personProfiles[selectedPerson] ?: PersonProfile(selectedPerson).also { personProfiles[selectedPerson] = it }
+            if (!hasRequiredProfile(profile)) personEditing = profile
+        }
+    }
     var deleteTarget by remember { mutableStateOf<VitalRecord?>(null) }
     var reportPeriod by remember { mutableStateOf((prefs.getString("last_report_period", "1개월") ?: "1개월").let { when (it) { "월간" -> "1개월"; "분기별" -> "3개월"; else -> it } }) }
     val vitalReportPeriods = remember { mutableStateMapOf<String, String>() }
@@ -1670,7 +1679,7 @@ fun EasyHealthApp(context: Context) {
             dismissButton = { TextButton(onClick = { showPeopleDialog = false }) { Text("닫기") } })
     }
     personEditing?.let { original ->
-        PersonProfileDialog(existing = original, onDismiss = { personEditing = null }, onSave = { updated ->
+        PersonProfileDialog(existing = original, required = !hasRequiredProfile(original), onDismiss = { personEditing = null }, onSave = { updated ->
             val oldName = original.name
             val newName = updated.name.trim()
             if (newName.isNotBlank() && (oldName.isBlank() || oldName == newName || !people.contains(newName))) {
@@ -1914,7 +1923,7 @@ private fun ProfileTimeRow(label: String, value: String, onChange: (String) -> U
 }
 
 @Composable
-private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, onSave: (PersonProfile) -> Unit) {
+private fun PersonProfileDialog(existing: PersonProfile, required: Boolean = false, onDismiss: () -> Unit, onSave: (PersonProfile) -> Unit) {
     var name by remember(existing) { mutableStateOf(existing.name) }
     var sex by remember(existing) { mutableStateOf(existing.sex) }
     var age by remember(existing) { mutableStateOf(existing.age?.toString() ?: "") }
@@ -1924,11 +1933,15 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
     var lunchTime by remember(existing) { mutableStateOf(existing.lunchTime) }
     var dinnerTime by remember(existing) { mutableStateOf(existing.dinnerTime) }
     var bedtime by remember(existing) { mutableStateOf(existing.bedtime) }
+    val parsedAge = age.toIntOrNull()
+    val parsedHeight = height.toDoubleOrNull()
+    val validProfile = name.trim().isNotBlank() && sex in listOf("남성", "여성") && parsedAge != null && parsedAge in 1..120 && parsedHeight != null && parsedHeight in 100.0..250.0
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!required) onDismiss() },
         title = { Text(if (existing.name.isBlank()) "측정 대상자 추가" else "측정 대상자 정보 수정") },
         text = {
             Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (required) Text("건강 분석을 위해 성별, 나이, 키를 입력해 주세요.", color = Green, fontSize = 12.sp)
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("이름") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("성별", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1952,14 +1965,10 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
         },
         confirmButton = {
             TextButton(onClick = {
-                val a = age.toIntOrNull()
-                val h = height.toDoubleOrNull()
-                if (name.trim().isNotBlank() && sex in listOf("남성", "여성") && a != null && a in 1..120 && h != null && h in 100.0..250.0) {
-                    onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime))
-                }
-            }) { Text("저장") }
+                if (validProfile) onSave(PersonProfile(name.trim(), sex, parsedAge, parsedHeight, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime))
+            }, enabled = validProfile) { Text("저장") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+        dismissButton = { if (!required) TextButton(onClick = onDismiss) { Text("취소") } }
     )
 }
 
