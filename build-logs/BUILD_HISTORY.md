@@ -36,3 +36,5 @@
 | 2026-11-25 | 1.39 TEST | `feature/v1.39-vitals-device-registration` | 성공 | 최종 CI run 45562672552 성공. 단위 테스트·APK 빌드·패키지/버전·테스트 서명 검증 및 artifact 업로드 완료. artifact 14998463498. 상세: [2026-11-25-v1.39-test-build.md](2026-11-25-v1.39-test-build.md) |
 
 | 2026-11-25 | 1.40 TEST | `feature/v1.40-vitals-device-registration` | CI 진행 중 | versionName 1.40 / versionCode 40 / test package `com.ryoo.easyhealth.test140`. 날짜 한 번 누르기로 입력 액션 표시, 세 버튼 라벨 공백 제거 및 글꼴 축소. Actions run 45569505787 진행 중. 당화혈색소 8개 시간대·최근 30일 개인별 식사 패턴 보완은 설계 제안으로 기록하며, 검증 전 계산 로직에는 반영하지 않음. 상세: [2026-11-25-v1.40-test-build.md](2026-11-25-v1.40-test-build.md) |
+
+| 2026-11-25 | 1.41 TEST | `feature/v1.41-health-schedule-diary` | 빌드 대기 | 1.40 작업 브랜치에서 분기. 일정·일기 초기 화면은 날짜별 박스(최신순), 날짜 선택 시 해당 날짜 입력 영역과 기록을 표시하며 기록은 시간 오름차순. 병원 예약·건강 일기·간단 메모 박스는 길게 눌러 수정. 버전 1.41 / versionCode 41 / 테스트 package `com.ryoo.easyhealth.test141`. CI 결과는 빌드 완료 후 추가 기록. |
