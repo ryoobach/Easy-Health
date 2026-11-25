@@ -1,0 +1,80 @@
+name: Android Test APK
+on:
+  push:
+    branches: [ "feature/v1.38-vitals-device-registration" ]
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "build-logs/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: easy-health-test-apk
+  cancel-in-progress: false
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore isolated test signing key
+        id: test-signing-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: easy-health-test-signing-key-v1
+      - name: Create isolated test signing key when absent
+        if: steps.test-signing-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Easy Health Test, OU=QA, O=Ryoo Jaesang, L=Jeongeup, ST=Jeollabuk-do, C=KR" -keyalg RSA -keysize 2048 -validity 10000
+      - name: Record test signing certificate
+        run: |
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA256:'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Run unit tests
+        run: gradle --no-daemon --no-build-cache testDebugUnitTest -PtestApp=true
+      - name: Build isolated test APK
+        run: gradle --no-daemon --no-build-cache --rerun-tasks assembleDebug -PtestApp=true
+      - name: Verify test package identity and version
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APK_ANALYZER="$(find "$ANDROID_HOME" -type f -name apkanalyzer | head -n 1)"
+          test -n "$APK_ANALYZER"
+          APP_ID="$("$APK_ANALYZER" manifest application-id "$APK")"
+          VERSION_CODE="$("$APK_ANALYZER" manifest version-code "$APK")"
+          VERSION_NAME="$("$APK_ANALYZER" manifest version-name "$APK")"
+          echo "Application ID: $APP_ID"
+          echo "Version code: $VERSION_CODE"
+          echo "Version name: $VERSION_NAME"
+          test "$APP_ID" = "com.ryoo.easyhealth.test"
+          test "$VERSION_CODE" = "38"
+          test "$VERSION_NAME" = "1.38"
+          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.38 TEST'
+      - name: Verify isolated test signature
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          KEY_SHA="$(keytool -exportcert -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | sha256sum | awk '{print tolower($1)}')"
+          APK_SHA="$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          echo "Test key SHA-256: $KEY_SHA"
+          echo "Test APK certificate SHA-256: $APK_SHA"
+          EXPECTED_PRODUCTION_SHA="e71f6e2cba41d3caef823be573636aaa1065e84022bcd7031cb4531b476b0354"
+          test -n "$APK_SHA"
+          test "$KEY_SHA" = "$APK_SHA"
+          test "$APK_SHA" != "$EXPECTED_PRODUCTION_SHA"
+      - name: Package test APK and installation guide
+        run: |
+          mkdir -p "Easy-Health-1.38-Test"
+          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.38-Test/Easy-Health-1.38-Test.apk"
+          printf "Easy Health 1.38 테스트 앱 설치 안내\\n\\n기존 Easy Health 1.37 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test로 설치되므로 기존 앱과 함께 설치됩니다.\\n테스트 앱의 데이터는 기존 1.37 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.38-Test/설치안내.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Easy-Health-1.38-Test
+          path: "Easy-Health-1.38-Test/*"
