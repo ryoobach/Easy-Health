@@ -20,6 +20,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    # The feature branch is built by android-test.yml with a separate package
+    # and test-only signing key. Production signing remains required on main.
+    if: github.ref != 'refs/heads/feature/v1.38-vitals-device-registration'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
