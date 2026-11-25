@@ -1,14 +1,28 @@
 # Easy Health 1.38
 
-## Changes
-- Added manual device registration entries for OMRON HEM-7140T1 and CAS BFA-S12.
-- Added a baseline body-weight field to each person profile. Existing profiles without this field remain readable.
-- Added independent 1-week, 1-month, 3-month, and all-time report periods for each vital section.
-- Updated BLE characteristic notification handling for Android 13+ and delayed the final import snapshot after the Glucose Service RACP completion response.
-- Glucose import now reports the number of records received, the newest timestamped reading, and whether that latest reading is present in the saved record set.
+## Measurement profiles
+- Require each measurement subject to provide a name, sex, age, and height before the profile can be saved.
+- Do not ask for a baseline weight in the profile. Weight remains a dated measurement record and can change over time.
+- Use sex, age, and height as context for individual health interpretation and BMI calculations based on recorded weight.
 
-## Hardware integration status
-OMRON HEM-7140T1 and CAS BFA-S12 can be registered and their vital types can be recorded in this build. Direct Easy Health BLE data reception for these two devices is not enabled yet; their GATT data formats and real-device behavior must be verified before enabling automatic import.
+## Calendar, appointments, journal, and notes
+- Rename the calendar tab to **일정·일기** and show records for the selected date.
+- Keep new-record actions above the existing date-specific record cards.
+- Support multiple hospital appointments, health-journal entries, and simple memos on the same date.
+- Open an existing card in edit mode.
+- Display the appointment status label as **확인**.
+- Require a reminder choice for hospital appointments (one day before, two hours before, 30 minutes before, or one day plus two hours).
+- Health-journal entries have no reminder. Simple memos have optional reminders.
 
-## Validation
-The GitHub Actions workflow checks unit tests, APK assembly, application ID, version code/name, and the established signing certificate. Physical-device testing remains necessary for Bluetooth transfers and the newest glucose reading.
+## Device registration and measurement import
+- The device-add dialog separates registered devices from newly discovered Bluetooth devices.
+- Registered devices have no checkboxes; long-pressing one opens a delete confirmation. Removing a device does not delete historical measurement records.
+- Newly discovered supported devices appear with checkboxes and are registered only after pressing the add button.
+- In the Records tab, keep the Bluetooth icon and label the action **측정값 자동 가져오기**.
+- Contour Plus ONE and CareSens Dual remain the two glucose meters exposed for automatic glucose import. OMRON HEM-7140T1 and CAS BFA-S12 can be registered, but automatic import remains disabled until their device protocols are verified.
+
+## Validation and test scope
+- The isolated test workflow runs unit tests, assembles the debug APK, verifies application ID/version, verifies the test signing certificate, packages the APK and installation guide, and uploads the artifact.
+- Test application ID: `com.ryoo.easyhealth.test`; version code: `38`; version name: `1.38`; launcher label: `Easy Health 1.38 TEST`.
+- The existing production package `com.ryoo.easyhealth` at version 1.37 is not modified or replaced by this isolated test build.
+- CI cannot verify physical Bluetooth transfers; Contour Plus ONE and CareSens Dual still require real-device pairing/import validation on the phone.
