@@ -3,18 +3,21 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+val testApp = providers.gradleProperty("testApp").orNull == "true"
 android {
     namespace = "com.ryoo.easyhealth"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.ryoo.easyhealth"
+        applicationId = if (testApp) "com.ryoo.easyhealth.test" else "com.ryoo.easyhealth"
         minSdk = 26
         targetSdk = 35
         versionCode = 38
         versionName = "1.38"
+        manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.38 TEST" else "Easy Health"
     }
-    // Always sign every debug APK with the same cached key. This prevents
-    // Android from treating each downloaded build as a different app.
+    // Always sign every debug APK with its designated key. The release workflow
+    // requires the established production key; the isolated test workflow uses
+    // a separate test-only key and package ID.
     signingConfigs {
         getByName("debug") {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
