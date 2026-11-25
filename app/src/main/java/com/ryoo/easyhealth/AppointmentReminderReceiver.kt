@@ -12,19 +12,23 @@ import androidx.core.app.NotificationCompat
 class AppointmentReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "hospital_appointments"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(channelId, "병원 방문 알림", NotificationManager.IMPORTANCE_HIGH))
-        }
+        val notificationTitle = intent.getStringExtra("notification_title") ?: "병원 방문 일정"
+        val customText = intent.getStringExtra("notification_text")
         val hospital = intent.getStringExtra("hospital") ?: "병원"
         val memo = intent.getStringExtra("memo").orEmpty()
+        val channelId = if (notificationTitle == "메모 알림") "schedule_diary_memos" else "hospital_appointments"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelName = if (notificationTitle == "메모 알림") "간단 메모 알림" else "병원 방문 알림"
+            manager.createNotificationChannel(NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH))
+        }
+        val notificationText = customText ?: if (memo.isBlank()) "$hospital 방문 시간입니다." else "$hospital · $memo"
         val openApp = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("병원 방문 일정")
-            .setContentText(if (memo.isBlank()) "$hospital 방문 시간입니다." else "$hospital · $memo")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(if (memo.isBlank()) "$hospital 방문 시간입니다." else "$hospital · $memo"))
+            .setContentTitle(notificationTitle)
+            .setContentText(notificationText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText))
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
