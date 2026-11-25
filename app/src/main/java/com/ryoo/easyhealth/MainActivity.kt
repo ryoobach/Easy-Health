@@ -2110,6 +2110,7 @@ private fun RecordDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onDateSelected: (String) -> Unit, onDateLongPressed: (String) -> Unit) {
     val monthCalendar = remember(selectedDate) {
