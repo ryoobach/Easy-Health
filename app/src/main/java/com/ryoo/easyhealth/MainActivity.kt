@@ -1033,50 +1033,72 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                 }
-                "병원 일정" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("병원 방문 일정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("진료 날짜와 시간을 등록하면 해당 시각에 휴대폰 알림을 보내드립니다.", color = Color.Gray, fontSize = 13.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("예정 일정", "지난 일정").forEach { section ->
-                            FilterChip(selected = appointmentSection == section, onClick = { appointmentSection = section }, label = { Text(section) })
-                        }
-                    }
-                    val nowForAppointments = System.currentTimeMillis()
-                    val appointmentDateFormat = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA)
-                    val visibleDates = appointments.filter { a ->
-                        val at = try { appointmentDateFormat.parse("${a.date} ${a.time}")?.time ?: 0L } catch (_: Exception) { 0L }
-                        if (appointmentSection == "예정 일정") at >= nowForAppointments && a.status == "예정" else at < nowForAppointments || a.status != "예정"
-                    }.map { it.date }.toSet()
-                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = visibleDates, onDateSelected = { selectedAppointmentDate = it })
-                    Button(onClick = {
-                        appointmentInitialDate = selectedAppointmentDate
-                        editingAppointment = null
-                        showAppointmentDialog = true
-                    }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(if (appointmentSection == "예정 일정") "선택한 날짜에 예약 등록" else "선택한 날짜에 진료 메모 추가")
-                    }
-                    val visibleAppointments = appointments.filter { a ->
-                        val whenAt = try { appointmentDateFormat.parse("${a.date} ${a.time}")?.time ?: 0L } catch (_: Exception) { 0L }
-                        if (appointmentSection == "예정 일정") whenAt >= nowForAppointments && a.status == "예정" else whenAt < nowForAppointments || a.status != "예정"
-                    }.sortedBy { it.date + " " + it.time }
-                    if (visibleAppointments.isEmpty()) Text(if (appointmentSection == "예정 일정") "예정된 병원 일정이 없습니다." else "지난 병원 일정이 없습니다.", color = Color.Gray)
-                    else visibleAppointments.forEach { a ->
-                        Card(modifier = Modifier.fillMaxWidth().combinedClickable(
-                            onClick = { editingAppointment = a; showAppointmentDialog = true },
-                            onLongClick = { appointmentDeleteTarget = a }
-                        ), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                    Text(a.status, color = if (a.status == "예정") Green else Color.Gray, fontSize = 12.sp)
-                                }
-                                Text("${a.date} ${a.time}", color = Green, fontWeight = FontWeight.Bold)
-                                if (a.memo.isNotBlank()) Text(a.memo, color = Color.Gray, fontSize = 12.sp)
+                "병원 일정" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
+                    Text("날짜를 선택하면 해당 날짜의 병원 예약, 건강 일기, 간단 메모를 함께 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
+                    val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
+                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = markedDates, onDateSelected = { selectedAppointmentDate = it })
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("새 기록 등록", color = Ink, fontWeight = FontWeight.Bold)
+                            Button(onClick = {
+                                appointmentInitialDate = selectedAppointmentDate
+                                editingAppointment = null
+                                showAppointmentDialog = true
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("병원 예약 등록")
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = {
+                                    dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true
+                                }, modifier = Modifier.weight(1f)) { Text("건강 일기") }
+                                OutlinedButton(onClick = {
+                                    dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true
+                                }, modifier = Modifier.weight(1f)) { Text("간단 메모") }
                             }
                         }
                     }
-                    Text("짧게 누르면 수정, 길게 누르면 삭제 확인창이 열립니다.", color = Color.Gray, fontSize = 11.sp)
-
+                    Text("${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    val dayAppointments = appointments.filter { it.date == selectedAppointmentDate }.sortedBy { it.time }
+                    val dayEntries = dailyEntries.filter { it.date == selectedAppointmentDate }.sortedBy { it.time }
+                    if (dayAppointments.isEmpty() && dayEntries.isEmpty()) {
+                        Text("이 날짜에 등록된 기록이 없습니다. 위에서 새 기록을 등록해 주세요.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    dayAppointments.forEach { a ->
+                        Card(modifier = Modifier.fillMaxWidth().clickable {
+                            editingAppointment = a; appointmentInitialDate = selectedAppointmentDate; showAppointmentDialog = true
+                        }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.weight(1f))
+                                    Text("확인", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text("${a.time} · ${a.memo.ifBlank { "진료 내용 미입력" }}", color = Color.Gray, fontSize = 12.sp)
+                                Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                    dayEntries.forEach { entry ->
+                        Card(modifier = Modifier.fillMaxWidth().clickable {
+                            editingDailyEntry = entry; dailyEntryKind = entry.kind; showDailyEntryDialog = true
+                        }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.weight(1f))
+                                    Text(entry.time, color = Color.Gray, fontSize = 11.sp)
+                                }
+                                if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(entry.body, color = Color.Gray, fontSize = 12.sp)
+                                if (entry.kind == "간단 메모" && entry.reminderMinutes != null) Text("알림 설정됨", color = Green, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                    if (dayAppointments.isNotEmpty() || dayEntries.isNotEmpty()) {
+                        Text("기존 기록 박스를 누르면 수정할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
+                    }
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
@@ -1279,32 +1301,27 @@ fun EasyHealthApp(context: Context) {
                     if (registeredDevices.isEmpty()) {
                         Text("등록된 기기가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))
                     } else {
+                        val savedMetersForSettings = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
                         devices.filter { it.first in registeredDevices }.forEach { device ->
+                            val hasBluetoothAddress = (0 until savedMetersForSettings.length()).any { index ->
+                                savedMetersForSettings.optJSONObject(index)?.optString("model") == device.first
+                            }
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.combinedClickable(onClick = {
-                                    if (enabledDevices.contains(device.first)) enabledDevices.remove(device.first) else enabledDevices.add(device.first)
-                                    prefs.edit().putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
-                                }, onLongClick = { deviceDeleteTarget = device.first })) {
+                                modifier = Modifier.combinedClickable(onClick = { deviceHelpTarget = device.first }, onLongClick = { deviceDeleteTarget = device.first })) {
                                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(checked = enabledDevices.contains(device.first), onCheckedChange = { checked ->
-                                        if (checked && !enabledDevices.contains(device.first)) enabledDevices.add(device.first)
-                                        if (!checked) enabledDevices.remove(device.first)
-                                        prefs.edit().putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
-                                    })
-                                    Column {
+                                    Icon(Icons.Default.Bluetooth, contentDescription = null, tint = Green, modifier = Modifier.padding(end = 10.dp))
+                                    Column(Modifier.weight(1f)) {
                                         Text(device.first, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(device.second.joinToString(" · "), color = Color.Gray, fontSize = 12.sp)
-                                        TextButton(onClick = { deviceHelpTarget = device.first }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
-                                            Text("연결 방법 보기", color = Green, fontSize = 11.sp)
-                                        }
                                     }
+                                    Text(if (hasBluetoothAddress) "연결 정보 저장됨" else "등록됨", color = if (hasBluetoothAddress) Green else Color.Gray, fontSize = 10.sp)
                                 }
                             }
                         }
-                        Text("짧게 누르면 초기 화면에 표시할 항목을 바꾸고, 길게 누르면 등록 삭제 확인창이 열립니다. 오므론·CAS 기기는 등록 후 직접 자동 수신 규격을 별도로 검증합니다.", color = Color.Gray, fontSize = 11.sp)
+                        Text("등록된 기기를 길게 누르면 삭제 확인창이 열립니다. 삭제해도 기존 측정 기록은 보존됩니다.", color = Color.Gray, fontSize = 11.sp)
                     }
-                    Text("일반 기기는 측정기를 페어링 모드로 설정한 뒤 휴대폰 블루투스에서 검색·등록해 주세요. Contour Plus ONE과 CareSens Dual은 각 기기별 연결 방법을 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
-                    Button(onClick = { registerSelections.clear(); showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("기기 추가를 누르면 등록된 기기와 새로 검색된 기기를 함께 확인할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
+                    Button(onClick = { registerSelections.clear(); bluetoothCandidates = emptyList(); showRegisterDeviceDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("기기 추가")
                     }
                 }
@@ -1327,46 +1344,88 @@ fun EasyHealthApp(context: Context) {
             confirmButton = { TextButton(onClick = { deviceHelpTarget = null }) { Text("확인") } })
     }
     if (showRegisterDeviceDialog) {
-        val addableDevices = listOf("OMRON HEM-7140T1", "CAS BFA-S12", "Contour Plus ONE", "CareSens Dual")
-        AlertDialog(onDismissRequest = { showRegisterDeviceDialog = false }, title = { Text("기기 추가") },
-            text = { Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("추가할 측정 기기를 선택해 주세요.", color = Ink, fontSize = 13.sp)
-                addableDevices.forEach { model ->
-                    Row(Modifier.fillMaxWidth().clickable {
-                        if (registerSelections.contains(model)) registerSelections.remove(model) else registerSelections.add(model)
-                    }.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = registerSelections.contains(model), onCheckedChange = { checked ->
-                            if (checked && !registerSelections.contains(model)) registerSelections.add(model)
-                            if (!checked) registerSelections.remove(model)
-                        })
-                        Column(Modifier.weight(1f)) {
-                            Text(model, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                            Text(when (model) {
-                                "OMRON HEM-7140T1" -> "혈압 · 맥박"
-                                "CAS BFA-S12" -> "체중 · 체지방률 · 골격근량 · BMI"
-                                "Contour Plus ONE" -> "혈당 · 블루투스 기록 가져오기"
-                                else -> "혈당 · 케톤 · 블루투스 기록 가져오기"
-                            }, color = Color.Gray, fontSize = 11.sp)
+        fun modelForBluetoothName(name: String): String {
+            val normalized = name.lowercase()
+            return when {
+                normalized.contains("contour") -> "Contour Plus ONE"
+                normalized.contains("caresens") || normalized.contains("i-sens") || normalized.contains("isens") -> "CareSens Dual"
+                normalized.contains("omron") -> "OMRON HEM-7140T1"
+                normalized.contains("cas") || normalized.contains("bfa") -> "CAS BFA-S12"
+                else -> name
+            }
+        }
+        val savedMetersForAdd = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
+        val newCandidates = bluetoothCandidates.filter { candidate ->
+            val model = modelForBluetoothName(candidate.name)
+            !registeredDevices.contains(model) && devices.any { it.first == model }
+        }
+        AlertDialog(onDismissRequest = { registerSelections.clear(); showRegisterDeviceDialog = false }, title = { Text("기기 추가") },
+            text = {
+                Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("이미 등록된 기기", color = Ink, fontWeight = FontWeight.Bold)
+                    if (registeredDevices.isEmpty()) Text("등록된 기기가 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                    registeredDevices.forEach { model ->
+                        Card(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { deviceHelpTarget = model }, onLongClick = { deviceDeleteTarget = model }),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF8))) {
+                            Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(model, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    Text("길게 누르면 삭제", color = Color.Gray, fontSize = 10.sp)
+                                }
+                                Text("등록됨", color = Green, fontSize = 11.sp)
+                            }
                         }
                     }
+                    HorizontalDivider()
+                    Text("새로 검색된 기기", color = Ink, fontWeight = FontWeight.Bold)
+                    OutlinedButton(onClick = { bluetoothCandidates = emptyList(); bluetoothStatus = "주변 블루투스 측정기를 검색하고 있습니다."; requestBluetoothScan() },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("주변 기기 검색")
+                    }
+                    Text(bluetoothStatus, color = Color.Gray, fontSize = 11.sp)
+                    if (newCandidates.isEmpty()) {
+                        Text("검색된 새 측정기가 여기에 표시됩니다. 기기를 페어링 모드로 바꾼 뒤 검색해 주세요.", color = Color.Gray, fontSize = 11.sp)
+                    } else {
+                        newCandidates.forEach { candidate ->
+                            Row(Modifier.fillMaxWidth().clickable {
+                                if (registerSelections.contains(candidate.address)) registerSelections.remove(candidate.address)
+                                else registerSelections.add(candidate.address)
+                            }.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(checked = candidate.address in registerSelections, onCheckedChange = { checked ->
+                                    if (checked && candidate.address !in registerSelections) registerSelections.add(candidate.address)
+                                    if (!checked) registerSelections.remove(candidate.address)
+                                })
+                                Column(Modifier.weight(1f)) {
+                                    Text(modelForBluetoothName(candidate.name), color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    Text("${candidate.name} · ${candidate.address}", color = Color.Gray, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                    Text("새 기기를 체크한 뒤 아래 추가 버튼을 누르면 등록됩니다. 혈당계의 측정값은 기록 탭에서 가져옵니다.", color = Color.Gray, fontSize = 11.sp)
                 }
-                HorizontalDivider()
-                Text("혈당계는 아래 검색 기능으로 블루투스 연결을 진행합니다. 오므론 혈압계와 CAS 체중계는 이번 버전에서 기기 등록·기록 항목 구성을 지원하며, 직접 자동 수신은 제조사별 통신 규격 확인 후 활성화합니다.", color = Color.Gray, fontSize = 11.sp)
-                OutlinedButton(onClick = { showBluetoothSearch = true; requestBluetoothScan() }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Bluetooth, null); Spacer(Modifier.width(6.dp)); Text("혈당계 블루투스 검색")
-                }
-            } },
-            confirmButton = { TextButton(onClick = {
-                registerSelections.forEach { model ->
-                    if (!registeredDevices.contains(model)) registeredDevices.add(model)
-                    if (!enabledDevices.contains(model)) enabledDevices.add(model)
-                }
-                prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
-                    .putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
-                registerSelections.clear()
-                showRegisterDeviceDialog = false
-            }, enabled = registerSelections.isNotEmpty()) { Text("선택 기기 추가") } },
-            dismissButton = { TextButton(onClick = { registerSelections.clear(); showRegisterDeviceDialog = false }) { Text("취소") } })
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val updatedMeters = JSONArray()
+                    for (i in 0 until savedMetersForAdd.length()) {
+                        val old = savedMetersForAdd.optJSONObject(i) ?: continue
+                        if (registerSelections.none { it == old.optString("address") }) updatedMeters.put(old)
+                    }
+                    newCandidates.filter { it.address in registerSelections }.forEach { candidate ->
+                        val model = modelForBluetoothName(candidate.name)
+                        if (model !in registeredDevices) registeredDevices.add(model)
+                        if (model !in enabledDevices) enabledDevices.add(model)
+                        updatedMeters.put(JSONObject().put("name", candidate.name).put("address", candidate.address).put("model", model))
+                    }
+                    prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
+                        .putString("enabled_devices", JSONArray(enabledDevices).toString())
+                        .putString("bluetooth_devices", updatedMeters.toString()).apply()
+                    registerSelections.clear()
+                    showRegisterDeviceDialog = false
+                }, enabled = newCandidates.any { it.address in registerSelections }) { Text("선택 기기 추가") }
+            },
+            dismissButton = { TextButton(onClick = { registerSelections.clear(); showRegisterDeviceDialog = false }) { Text("닫기") } })
     }
     if (showBluetoothSearch) {
         AlertDialog(onDismissRequest = { bluetoothClient.stopScan(); showBluetoothSearch = false }, title = { Text("블루투스 기기 찾기") },
@@ -1395,8 +1454,12 @@ fun EasyHealthApp(context: Context) {
             text = { Text(target + " 기기를 삭제하시겠습니까?") },
             confirmButton = { TextButton(onClick = {
                 registeredDevices.remove(target); enabledDevices.remove(target)
+                val oldMeters = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
+                val keptMeters = JSONArray()
+                for (i in 0 until oldMeters.length()) { val item = oldMeters.optJSONObject(i) ?: continue; if (item.optString("model") != target) keptMeters.put(item) }
                 prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString())
-                    .putString("enabled_devices", JSONArray(enabledDevices).toString()).apply()
+                    .putString("enabled_devices", JSONArray(enabledDevices).toString())
+                    .putString("bluetooth_devices", keptMeters.toString()).apply()
                 deviceDeleteTarget = null
             }) { Text("삭제", color = Color.Red) } },
             dismissButton = { TextButton(onClick = { deviceDeleteTarget = null }) { Text("취소") } })
@@ -1478,13 +1541,13 @@ fun EasyHealthApp(context: Context) {
         )
     }
     if (showAppointmentDialog) {
-        AppointmentDialog(existing = editingAppointment, initialDate = appointmentInitialDate, initialStatus = if (appointmentSection == "지난 일정") "진료 완료" else "예정", onDismiss = { showAppointmentDialog = false; appointmentInitialDate = null },
-            onSave = { hospital, date, time, memo, status ->
+        AppointmentDialog(existing = editingAppointment, initialDate = appointmentInitialDate, onDismiss = { showAppointmentDialog = false; appointmentInitialDate = null },
+            onSave = { hospital, date, time, memo, reminderOffsets ->
                 val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
                 val parsed = try { fmt.parse("$date $time") } catch (_: Exception) { null }
                 if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || appointmentSection == "지난 일정" || parsed.time > System.currentTimeMillis())) {
                     editingAppointment?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
-                    val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, status)
+                    val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, "확인", reminderOffsets)
                     appointments.add(saved); saveAppointments(context, appointments); scheduleAppointmentReminder(context, saved)
                     selectedAppointmentDate = date
                     appointmentInitialDate = null
