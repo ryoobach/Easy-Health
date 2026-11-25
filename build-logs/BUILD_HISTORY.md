@@ -3,7 +3,7 @@
 | 날짜 | 버전 | 브랜치 | 결과 | 요약 |
 |---|---|---|---|---|
 | 2026-11-25 | 1.38 production | `feature/v1.38-vitals-device-registration` | 차단 | 기존 production 서명키 캐시를 복원하지 못해 안전장치에서 중단. 기존 1.37 앱의 업데이트 호환성을 위해 production signing guard 유지. 상세: [2026-11-25-v1.38-signing-key-cache-miss.md](2026-11-25-v1.38-signing-key-cache-miss.md) |
-| 2026-11-25 | 1.38 TEST | `feature/v1.38-vitals-device-registration` | 진행 중 | 기존 1.37을 보존하는 별도 package ID `com.ryoo.easyhealth.test` 테스트 APK. 단위 테스트와 APK 생성·서명 검증 성공 기록 및 최종 실행 추적: [2026-11-25-v1.38-feature-test-build.md](2026-11-25-v1.38-feature-test-build.md) |
+| 2026-11-25 | 1.38 TEST | `feature/v1.38-vitals-device-registration` | 성공 | 별도 package ID `com.ryoo.easyhealth.test` 테스트 APK 생성·단위 테스트·패키지/버전/서명 검증·아티팩트 업로드 완료. run 45552681894, artifact 14994975137. 상세: [2026-11-25-v1.38-feature-test-build.md](2026-11-25-v1.38-feature-test-build.md) |
 
 ## 재개 시 우선 확인
 - 1.38 source and UI changes are preserved on the feature branch.
