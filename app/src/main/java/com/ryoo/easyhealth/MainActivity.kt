@@ -884,7 +884,7 @@ fun EasyHealthApp(context: Context) {
                                 when (name) {
                                     "기록" -> Icon(Icons.Default.MonitorHeart, contentDescription = "기록")
                                     "리포트" -> Icon(Icons.Default.Assessment, contentDescription = "리포트")
-                                    "병원 일정" -> Box(Modifier.size(24.dp)) {
+                                    "일정·일기" -> Box(Modifier.size(24.dp)) {
                                         Icon(Icons.Default.CalendarMonth, contentDescription = "병원 일정", modifier = Modifier.align(Alignment.Center))
                                         Icon(Icons.Default.MedicalServices, contentDescription = null, modifier = Modifier.align(Alignment.BottomEnd).size(11.dp))
                                     }
