@@ -1052,22 +1052,22 @@ fun EasyHealthApp(context: Context) {
                 }
                 "일정·일기" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("날짜를 선택하면 해당 날짜의 병원 예약, 건강 일기, 간단 메모를 함께 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
+                    Text("날짜를 누르면 해당 날짜의 기록을 입력할 수 있고, 아래에서 기존 기록을 시간순으로 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
                     val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
-                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = markedDates, onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = false }, onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true })
+                    HospitalCalendar(selectedDate = selectedAppointmentDate, markedDates = markedDates, onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = true }, onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true })
                     if (showDateEntryActions) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${selectedAppointmentDate} 새 기록 입력", color = Ink, fontWeight = FontWeight.Bold)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    OutlinedButton(onClick = { appointmentInitialDate = selectedAppointmentDate; editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.weight(1f)) {
-                                        Text("병원 예약", maxLines = 1, softWrap = false)
+                                    OutlinedButton(onClick = { appointmentInitialDate = selectedAppointmentDate; editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
+                                        Text("병원예약", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                     }
-                                    OutlinedButton(onClick = { dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) {
-                                        Text("건강일기", maxLines = 1, softWrap = false)
+                                    OutlinedButton(onClick = { dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
+                                        Text("건강일기", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                     }
-                                    OutlinedButton(onClick = { dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f)) {
-                                        Text("간단메모", maxLines = 1, softWrap = false)
+                                    OutlinedButton(onClick = { dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
+                                        Text("간단메모", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                     }
                                 }
                             }
@@ -1079,7 +1079,7 @@ fun EasyHealthApp(context: Context) {
                         .sortedDescending()
                     data class DayTimelineItem(val time: String, val appointment: HospitalAppointment? = null, val entry: DailyEntry? = null)
                     if (recordDates.isEmpty()) {
-                        Text("아직 등록된 기록이 없습니다. 날짜를 길게 눌러 새 기록을 입력할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
+                        Text("아직 등록된 기록이 없습니다. 달력에서 날짜를 눌러 새 기록을 입력할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
                     recordDates.forEach { recordDate ->
                         val dayAppointments = appointments.filter { it.date == recordDate }
@@ -2167,7 +2167,7 @@ private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onD
                     }
                 }
             }
-            Text("날짜를 누르면 선택, 길게 누르면 새 기록 입력 메뉴가 열립니다. 연한 초록색은 기록이 있는 날입니다.", color = Color.Gray, fontSize = 10.sp)
+            Text("날짜를 누르면 새 기록 입력 메뉴가 열립니다. 연한 초록색은 기록이 있는 날입니다.", color = Color.Gray, fontSize = 10.sp)
         }
     }
 }
