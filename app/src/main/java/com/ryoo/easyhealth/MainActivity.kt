@@ -480,7 +480,14 @@ fun EasyHealthApp(context: Context) {
             override fun onDevices(devices: List<MeterCandidate>) { bluetoothCandidates = devices }
             override fun onConnected(device: MeterCandidate) {
                 activeBluetoothName = device.name
-                val model = if (device.name.lowercase().contains("caresens")) "CareSens Dual" else "Contour Plus ONE"
+                val normalizedName = device.name.lowercase()
+                val model = when {
+                    normalizedName.contains("caresens") || normalizedName.contains("i-sens") || normalizedName.contains("isens") -> "CareSens Dual"
+                    normalizedName.contains("contour") -> "Contour Plus ONE"
+                    normalizedName.contains("omron") -> "OMRON HEM-7140T1"
+                    normalizedName.contains("cas") || normalizedName.contains("bfa") -> "CAS BFA-S12"
+                    else -> device.name
+                }
                 if (!registeredDevices.contains(model)) registeredDevices.add(model)
                 prefs.edit().putString("registered_devices", JSONArray(registeredDevices).toString()).apply()
                 val saved = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
@@ -822,7 +829,7 @@ fun EasyHealthApp(context: Context) {
                 var swipeDistance = 0f
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        val tabs = listOf("기록", "리포트", "병원 일정", "기기 설정")
+                        val tabs = listOf("기록", "리포트", "일정·일기", "기기 설정")
                         val index = tabs.indexOf(tab)
                         if (swipeDistance < -90f && index < tabs.lastIndex) tab = tabs[index + 1]
                         if (swipeDistance > 90f && index > 0) tab = tabs[index - 1]
@@ -862,7 +869,7 @@ fun EasyHealthApp(context: Context) {
             },
             bottomBar = {
                 NavigationBar(containerColor = Color.White) {
-                    listOf("기록", "리포트", "병원 일정", "기기 설정").forEach { name ->
+                    listOf("기록", "리포트", "일정·일기", "기기 설정").forEach { name ->
                         NavigationBarItem(selected = tab == name, onClick = { tab = name },
                             icon = {
                                 when (name) {
@@ -1033,7 +1040,7 @@ fun EasyHealthApp(context: Context) {
                         }
                     }
                 }
-                "병원 일정" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                "일정·일기" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("날짜를 선택하면 해당 날짜의 병원 예약, 건강 일기, 간단 메모를 함께 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
                     val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
@@ -1532,8 +1539,8 @@ fun EasyHealthApp(context: Context) {
                     Text("기기 설정에서 측정기기를 등록하고 연결 상태를 확인합니다. 블루투스 자동 가져오기를 누른 뒤 기기를 선택하면 측정값을 가져올 수 있습니다. 기기별 연결 방법도 확인할 수 있습니다.")
                     Text("4. 건강 리포트", fontWeight = FontWeight.Bold, color = Ink)
                     Text("리포트 화면에서 1주일, 1개월, 3개월 또는 전체 기간의 기록을 확인할 수 있습니다. 필요한 건강 항목을 선택해 평균, 최고·최저값과 측정 추이를 살펴보세요.")
-                    Text("5. 병원 일정", fontWeight = FontWeight.Bold, color = Ink)
-                    Text("병원 일정에서 방문 날짜와 시간을 등록하고 메모를 남길 수 있습니다.")
+                    Text("5. 일정 · 일기", fontWeight = FontWeight.Bold, color = Ink)
+                    Text("날짜별 병원 예약, 건강 일기, 간단 메모를 등록하고 편집할 수 있습니다.")
                     Text("참고: 화면의 색상과 기준은 일반적인 참고 정보이며 의료진의 진단을 대신하지 않습니다. 측정 조건과 개인별 목표에 따라 해석이 달라질 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                 }
             },
