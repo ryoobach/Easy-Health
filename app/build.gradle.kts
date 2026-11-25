@@ -8,7 +8,7 @@ android {
     namespace = "com.ryoo.easyhealth"
     compileSdk = 35
     defaultConfig {
-        applicationId = if (testApp) "com.ryoo.easyhealth.test" else "com.ryoo.easyhealth"
+        applicationId = if (testApp) "com.ryoo.easyhealth.test139" else "com.ryoo.easyhealth"
         minSdk = 26
         targetSdk = 35
         versionCode = 39
