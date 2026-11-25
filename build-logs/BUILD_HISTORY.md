@@ -22,4 +22,5 @@
 | 2026-11-25 | 1.40 TEST | `feature/v1.40-vitals-device-registration` | 기록 확인 필요 | versionName 1.40 / versionCode 40 / test package `com.ryoo.easyhealth.test140`. 상세: [2026-11-25-v1.40-test-build.md](2026-11-25-v1.40-test-build.md) |
 | 2026-11-25 | 1.41 TEST | `feature/v1.41-health-schedule-diary` | 빌드 대기 | 일정·일기 초기 화면은 날짜별 박스(최신순), 날짜 선택 시 해당 날짜 입력 영역과 기록을 표시하며 기록은 시간 오름차순. 버전 1.41 / versionCode 41 / 테스트 package `com.ryoo.easyhealth.test141`. |
 
-| 2026-11-26 | 1.42 TEST | `feature/v1.41-health-schedule-diary` | CI 시작 대기 | 빌드마다 버전 증가 규칙에 따라 versionName 1.42 / versionCode 42 / 테스트 package `com.ryoo.easyhealth.test142`로 승격. 기존 정식 앱 `com.ryoo.easyhealth` 및 설치 데이터는 변경하지 않음. 이 빌드는 격리 테스트 APK이며 정식 업데이트 파일이 아님. |
+| 2026-11-26 | 1.42 TEST | `feature/v1.41-health-schedule-diary` | 실패 | CI run 45716862348: `app/build.gradle.kts` 23행의 문자열 보간 escape 오류로 Gradle Kotlin DSL 컴파일 실패. 단위 테스트 실행 단계에서 중단, APK 생성 전 실패. 버전 1.42 소비 처리. 상세 원인: run 45716862348. |
+| 2026-11-26 | 1.43 TEST | `feature/v1.41-health-schedule-diary` | CI 시작 대기 | 1.42 실패 버전을 재사용하지 않고 versionName 1.43 / versionCode 43 / 테스트 package `com.ryoo.easyhealth.test143`으로 증가. Gradle 설정은 직전 정상 소스 기반으로 복구하고 문자열 보간 문법을 보존. 정식 앱과 데이터는 변경하지 않음. |

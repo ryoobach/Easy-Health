@@ -10,17 +10,20 @@ android {
     namespace = "com.ryoo.easyhealth"
     compileSdk = 35
     defaultConfig {
-        applicationId = if (testApp) "com.ryoo.easyhealth.test142" else "com.ryoo.easyhealth"
+        applicationId = if (testApp) "com.ryoo.easyhealth.test143" else "com.ryoo.easyhealth"
         minSdk = 26
         targetSdk = 35
-        versionCode = 42
-        versionName = "1.42"
-        manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.42 TEST" else "Easy Health"
-        buildConfigField("String", "BUILD_DATE", "\"\${LocalDate.now()}\"")
+        versionCode = 43
+        versionName = "1.43"
+        manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.43 TEST" else "Easy Health"
+        buildConfigField("String", "BUILD_DATE", "\"${LocalDate.now()}\"")
     }
+    // Always sign every debug APK with its designated key. The release workflow
+    // requires the established production key; the isolated test workflow uses
+    // a separate test-only key and package ID.
     signingConfigs {
         getByName("debug") {
-            storeFile = file("\${System.getProperty("user.home")}/.android/debug.keystore")
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
