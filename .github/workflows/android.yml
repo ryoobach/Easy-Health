@@ -2,8 +2,16 @@ name: Android APK
 on:
   push:
     branches: [ "main", "feature/v1.38-vitals-device-registration" ]
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "build-logs/**"
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "build-logs/**"
   workflow_dispatch:
 permissions:
   contents: read
