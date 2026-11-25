@@ -1073,50 +1073,65 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                     }
-                    Text("${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    // 병원 예약과 일기/메모를 하나의 시간순 타임라인으로 표시합니다.
-                    val dayAppointments = appointments.filter { it.date == selectedAppointmentDate }
-                    val dayEntries = dailyEntries.filter { it.date == selectedAppointmentDate }
+                    // 모든 날짜의 병원 예약·건강일기·간단메모를 날짜별로 묶어 최신순으로 표시합니다.
+                    val recordDates = (appointments.map { it.date } + dailyEntries.map { it.date })
+                        .distinct()
+                        .sortedDescending()
                     data class DayTimelineItem(val time: String, val appointment: HospitalAppointment? = null, val entry: DailyEntry? = null)
-                    val dayTimeline = (dayAppointments.map { DayTimelineItem(it.time, appointment = it) } +
-                        dayEntries.map { DayTimelineItem(it.time, entry = it) }).sortedBy { it.time }
-                    if (dayTimeline.isEmpty()) {
-                        Text("이 날짜에 등록된 기록이 없습니다. 날짜를 길게 눌러 새 기록을 입력할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
+                    if (recordDates.isEmpty()) {
+                        Text("아직 등록된 기록이 없습니다. 날짜를 길게 눌러 새 기록을 입력할 수 있습니다.", color = Color.Gray, fontSize = 12.sp)
                     }
-                    dayTimeline.forEach { item ->
-                        item.appointment?.let { a ->
-                            Card(modifier = Modifier.fillMaxWidth().clickable {
-                                editingAppointment = a; appointmentInitialDate = selectedAppointmentDate; showAppointmentDialog = true
-                            }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(Modifier.weight(1f)); Text(a.time, color = Color.Gray, fontSize = 11.sp)
+                    recordDates.forEach { recordDate ->
+                        val dayAppointments = appointments.filter { it.date == recordDate }
+                        val dayEntries = dailyEntries.filter { it.date == recordDate }
+                        val dayTimeline = (dayAppointments.map { DayTimelineItem(it.time, appointment = it) } +
+                            dayEntries.map { DayTimelineItem(it.time, entry = it) }).sortedBy { it.time }
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(recordDate, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                                modifier = Modifier.padding(top = 6.dp))
+                            dayTimeline.forEach { item ->
+                                item.appointment?.let { a ->
+                                    Card(modifier = Modifier.fillMaxWidth().clickable {
+                                        editingAppointment = a
+                                        appointmentInitialDate = a.date
+                                        showAppointmentDialog = true
+                                    }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.weight(1f))
+                                                Text(a.time, color = Color.Gray, fontSize = 11.sp)
+                                            }
+                                            Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
+                                            Text(a.memo.ifBlank { "진료 내용 미입력" }, color = Color.Gray, fontSize = 12.sp)
+                                            Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
+                                        }
                                     }
-                                    Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
-                                    Text(a.memo.ifBlank { "진료 내용 미입력" }, color = Color.Gray, fontSize = 12.sp)
-                                    Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
+                                }
+                                item.entry?.let { entry ->
+                                    Card(modifier = Modifier.fillMaxWidth().clickable {
+                                        editingDailyEntry = entry
+                                        dailyEntryKind = entry.kind
+                                        showDailyEntryDialog = true
+                                    }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.weight(1f))
+                                                Text(entry.time, color = Color.Gray, fontSize = 11.sp)
+                                            }
+                                            if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
+                                            Text(entry.body, color = Color.Gray, fontSize = 12.sp)
+                                            if (entry.reminderMinutes != null) Text("알림 설정됨", color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                    }
                                 }
                             }
                         }
-                        item.entry?.let { entry ->
-                            Card(modifier = Modifier.fillMaxWidth().clickable {
-                                editingDailyEntry = entry; dailyEntryKind = entry.kind; showDailyEntryDialog = true
-                            }, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(Modifier.weight(1f)); Text(entry.time, color = Color.Gray, fontSize = 11.sp)
-                                    }
-                                    if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
-                                    Text(entry.body, color = Color.Gray, fontSize = 12.sp)
-                                    if (entry.reminderMinutes != null) Text("알림 설정됨", color = Color.Gray, fontSize = 10.sp)
-                                }
-                            }
-                        }
                     }
-                    if (dayTimeline.isNotEmpty()) Text("기록 박스를 누르면 수정할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
+                    if (recordDates.isNotEmpty()) Text("기록 박스를 누르면 수정할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
 
+                }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
