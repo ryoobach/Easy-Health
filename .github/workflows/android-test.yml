@@ -1,7 +1,7 @@
 name: Android Test APK
 on:
   push:
-    branches: [ "feature/v1.38-vitals-device-registration" ]
+    branches: [ "feature/v1.39-vitals-device-registration" ]
     paths-ignore:
       - "*.md"
       - "**/*.md"
@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Download approved shared creator icon
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          curl --fail --location --retry 3 --output app/src/main/res/drawable-nodpi/js_logo.png https://raw.githubusercontent.com/ryoobach/build_standard/main/js_logo.png
+          test -s app/src/main/res/drawable-nodpi/js_logo.png
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -54,9 +59,9 @@ jobs:
           echo "Version code: $VERSION_CODE"
           echo "Version name: $VERSION_NAME"
           test "$APP_ID" = "com.ryoo.easyhealth.test"
-          test "$VERSION_CODE" = "38"
-          test "$VERSION_NAME" = "1.38"
-          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.38 TEST'
+          test "$VERSION_CODE" = "39"
+          test "$VERSION_NAME" = "1.39"
+          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.39 TEST'
       - name: Verify isolated test signature
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
@@ -71,10 +76,10 @@ jobs:
           test "$APK_SHA" != "$EXPECTED_PRODUCTION_SHA"
       - name: Package test APK and installation guide
         run: |
-          mkdir -p "Easy-Health-1.38-Test"
-          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.38-Test/Easy-Health-1.38-Test.apk"
-          printf "Easy Health 1.38 테스트 앱 설치 안내\\n\\n기존 Easy Health 1.37 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test로 설치되므로 기존 앱과 함께 설치됩니다.\\n테스트 앱의 데이터는 기존 1.37 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.38-Test/설치안내.txt"
+          mkdir -p "Easy-Health-1.39-Test"
+          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.39-Test/Easy-Health-1.39-Test.apk"
+          printf "Easy Health 1.39 테스트 앱 설치 안내\\n\\n기존 Easy Health 1.37 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test로 설치되므로 기존 앱과 함께 설치됩니다.\\n테스트 앱의 데이터는 기존 1.37 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.39-Test/설치안내.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: Easy-Health-1.38-Test
-          path: "Easy-Health-1.38-Test/*"
+          name: Easy-Health-1.39-Test
+          path: "Easy-Health-1.39-Test/*"
