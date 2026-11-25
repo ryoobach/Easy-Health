@@ -16,15 +16,15 @@ class AppointmentReminderReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(NotificationChannel(channelId, "병원 방문 알림", NotificationManager.IMPORTANCE_HIGH))
         }
-        val hospital = intent.getStringExtra("hospital") ?: "병원"
-        val memo = intent.getStringExtra("memo").orEmpty()
+        val title = intent.getStringExtra("title") ?: intent.getStringExtra("hospital") ?: "건강 일정"
+        val body = intent.getStringExtra("body") ?: intent.getStringExtra("memo").orEmpty().ifBlank { "등록한 일정 알림입니다." }
         val openApp = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("병원 방문 일정")
-            .setContentText(if (memo.isBlank()) "$hospital 방문 시간입니다." else "$hospital · $memo")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(if (memo.isBlank()) "$hospital 방문 시간입니다." else "$hospital · $memo"))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
