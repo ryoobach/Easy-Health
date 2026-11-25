@@ -8,3 +8,12 @@
 - 1.38 소스 변경은 feature 브랜치에 보존되어 있습니다.
 - 기존 설치본(1.37)의 업데이트 호환성을 지키기 위해 기존 서명키 복구가 선행되어야 합니다.
 - 서명키가 확인되기 전에는 새 키로 빌드하거나 기존 앱을 교체하지 않습니다.
+
+
+## 2026-11-25 — Signing-key recovery investigation
+
+- Confirmed the original keystore was generated in Actions run 43773225589 and persisted only via the Actions cache.
+- The cache was successfully restored through 2026-11-17 12:34 UTC, then was missing in the 2026-11-24 23:38 UTC build. The interval exceeds GitHub's default seven-day cache inactivity retention.
+- No keystore file exists in the checked repository tree; available workflow artifacts are APK packages only.
+- Build remains blocked intentionally. Do not generate a new signing key or replace the user's installed 1.37 app. Recover the original private key from a separate backup before attempting 1.38.
+- Workflow now ignores documentation-only pushes and pull requests to avoid repeated, pointless Android build attempts from log/guideline edits.
