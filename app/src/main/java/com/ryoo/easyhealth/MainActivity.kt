@@ -1545,7 +1545,7 @@ fun EasyHealthApp(context: Context) {
             onSave = { hospital, date, time, memo, reminderOffsets ->
                 val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
                 val parsed = try { fmt.parse("$date $time") } catch (_: Exception) { null }
-                if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || appointmentSection == "지난 일정" || parsed.time > System.currentTimeMillis())) {
+                if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || parsed.time > System.currentTimeMillis())) {
                     editingAppointment?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
                     val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, "확인", reminderOffsets)
                     appointments.add(saved); saveAppointments(context, appointments); scheduleAppointmentReminder(context, saved)
@@ -1558,6 +1558,39 @@ fun EasyHealthApp(context: Context) {
             },
             onDelete = { a -> appointmentDeleteTarget = a; showAppointmentDialog = false }
         )
+    }
+    if (showDailyEntryDialog) {
+        DailyEntryDialog(existing = editingDailyEntry, kind = dailyEntryKind, initialDate = selectedAppointmentDate,
+            onDismiss = { showDailyEntryDialog = false },
+            onSave = { date, time, title, body, reminderMinutes ->
+                val parsed = try { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }.parse("$date $time") } catch (_: Exception) { null }
+                if (parsed != null && body.isNotBlank()) {
+                    editingDailyEntry?.let { cancelDailyEntryReminder(context, it.id); dailyEntries.removeAll { old -> old.id == it.id } }
+                    val saved = DailyEntry(editingDailyEntry?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+                        dailyEntryKind, date, time, title, body, if (dailyEntryKind == "간단 메모") reminderMinutes else null)
+                    dailyEntries.add(saved)
+                    saveDailyEntries(context, dailyEntries)
+                    scheduleDailyEntryReminder(context, saved)
+                    selectedAppointmentDate = date
+                    showDailyEntryDialog = false
+                    if (saved.reminderMinutes != null && android.os.Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 702)
+                }
+            },
+            onDelete = { entry -> dailyEntryDeleteTarget = entry; showDailyEntryDialog = false }
+        )
+    }
+    dailyEntryDeleteTarget?.let { target ->
+        AlertDialog(onDismissRequest = { dailyEntryDeleteTarget = null }, title = { Text("기록 삭제") },
+            text = { Text("선택한 ${target.kind} 기록을 삭제하시겠습니까?") },
+            confirmButton = { TextButton(onClick = {
+                cancelDailyEntryReminder(context, target.id)
+                dailyEntries.removeAll { it.id == target.id }
+                saveDailyEntries(context, dailyEntries)
+                dailyEntryDeleteTarget = null
+            }) { Text("삭제", color = Color.Red) } },
+            dismissButton = { TextButton(onClick = { dailyEntryDeleteTarget = null }) { Text("취소") } })
     }
     appointmentDeleteTarget?.let { target ->
         AlertDialog(
