@@ -1169,6 +1169,7 @@ fun EasyHealthApp(context: Context) {
                                     color = Color.Gray, fontSize = 11.sp
                                 )
                                 Text("실제 검사실 당화혈색소가 아닌 참고용 추정치입니다.", color = Color.Gray, fontSize = 10.sp)
+                                Text("혈당측정을 많이 할수록 당화혈색소 추정치가 정확합니다.", color = Color.Gray, fontSize = 10.sp)
                             }
                         }
                     }
