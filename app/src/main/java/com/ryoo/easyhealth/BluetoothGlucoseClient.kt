@@ -81,7 +81,9 @@ class BluetoothGlucoseClient(private val context: Context) {
                 if (name.isNullOrBlank()) return
                 val normalized = name.lowercase()
                 if (!normalized.contains("contour") && !normalized.contains("caresens") &&
-                    !normalized.contains("i-sens") && !normalized.contains("glucose")) return
+                    !normalized.contains("i-sens") && !normalized.contains("isens") &&
+                    !normalized.contains("glucose") && !normalized.contains("omron") &&
+                    !normalized.contains("cas") && !normalized.contains("bfa")) return
                 val candidate = MeterCandidate(name, device.address, device)
                 found[device.address] = candidate
                 handler.post { this@BluetoothGlucoseClient.listener?.onDevices(found.values.toList()) }
