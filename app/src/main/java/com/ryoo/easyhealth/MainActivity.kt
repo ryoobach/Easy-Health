@@ -818,18 +818,18 @@ fun EasyHealthApp(context: Context) {
     // 초기 화면은 최근 90일 기준을 유지하고, 리포트는 선택한 기간만 별도로 계산합니다.
     val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
     val reportGlucoseRecords = personRecords.filter { it.type == "혈당" && it.timestamp <= now }
-    val reportA1cWindowStart = if (reportPeriod == "전체") {
-        reportGlucoseRecords.minOfOrNull { it.timestamp } ?: now
-    } else reportStart
-    val reportWindowDuration = (now - reportA1cWindowStart).coerceAtLeast(0L)
+    // HbA1c represents a weighted estimate of the preceding ~3 months and must not
+    // change when the user switches the report's display period (1 week/1 month/etc.).
+    val reportA1cWindowStart = Calendar.getInstance().apply {
+        timeInMillis = now
+        add(Calendar.MONTH, -3)
+    }.timeInMillis
     val reportA1cEstimate = calculateTimeWeightedGlucoseEstimate(
         records = reportGlucoseRecords,
         nowMillis = now,
         windowStartMillis = reportA1cWindowStart,
         windowEndMillis = now,
-        // For a one-week report, require a meaningful multi-day span without making a full
-        // seven-day span mathematically mandatory. Longer reports retain the existing 7-day floor.
-        minimumSpanMillis = minOf(7L * 24L * 60L * 60L * 1000L, maxOf(24L * 60L * 60L * 1000L, reportWindowDuration / 2L))
+        minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
     )
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
@@ -1140,7 +1140,7 @@ fun EasyHealthApp(context: Context) {
                     if (reportEnabledTypes.contains("혈당") || reportGlucoseRecords.isNotEmpty()) {
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("당화혈색소 앱 추정치 · ${reportPeriod}", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("당화혈색소 추정치 · 최근 3개월", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 Text(
                                     reportA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
                                     color = reportA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
