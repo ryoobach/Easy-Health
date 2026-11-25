@@ -282,7 +282,7 @@ private fun scheduleScheduleDiaryReminder(context: Context, note: ScheduleDiaryN
 
 private fun scheduleAppointmentReminder(context: Context, a: HospitalAppointment) {
     val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
-    val at = fmt.parse("\${a.date} \${a.time}") ?: return
+    val at = fmt.parse("${a.date} ${a.time}") ?: return
     val intent = android.content.Intent(context, AppointmentReminderReceiver::class.java).apply {
         putExtra("appointment_id", a.id); putExtra("hospital", a.hospital); putExtra("memo", a.memo)
     }
@@ -1490,8 +1490,10 @@ fun EasyHealthApp(context: Context) {
                     appointments.add(saved); saveAppointments(context, appointments)
                     if (saved.reminderEnabled) scheduleAppointmentReminder(context, saved) else cancelAppointmentReminder(context, saved.id)
                     selectedAppointmentDate = date
+                    selectedScheduleDiaryDate = date
+                    scheduleDiaryDateSelected = true
                     appointmentInitialDate = null
-                    if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    if (reminderEnabled && android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                         (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 701)
                     showAppointmentDialog = false
                 }
@@ -2135,7 +2137,7 @@ private fun AppointmentDialog(existing: HospitalAppointment?, initialDate: Strin
         }, hour, minute, true).show()
     }
 
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "병원 일정 등록" else "병원 일정 수정") },
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "병원 예약 등록" else "병원 예약 수정") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = hospital, onValueChange = { hospital = it }, label = { Text("병원명") }, singleLine = true)
             OutlinedTextField(value = department, onValueChange = { department = it }, label = { Text("진료과") }, singleLine = true)
