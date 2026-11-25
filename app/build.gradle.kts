@@ -1,3 +1,5 @@
+import java.time.LocalDate
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,7 +16,7 @@ android {
         versionCode = 39
         versionName = "1.39"
         manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.39 TEST" else "Easy Health"
-        buildConfigField("String", "BUILD_DATE", "\"${java.time.LocalDate.now()}\"")
+        buildConfigField("String", "BUILD_DATE", "\"${LocalDate.now()}\"")
     }
     // Always sign every debug APK with its designated key. The release workflow
     // requires the established production key; the isolated test workflow uses
