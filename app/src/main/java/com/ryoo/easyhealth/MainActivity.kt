@@ -2020,28 +2020,33 @@ private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onD
 }
 
 @Composable
-private fun AppointmentDialog(existing: HospitalAppointment?, initialDate: String? = null, initialStatus: String? = null, onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String) -> Unit, onDelete: (HospitalAppointment) -> Unit) {
+private fun AppointmentDialog(existing: HospitalAppointment?, initialDate: String? = null, onDismiss: () -> Unit,
+    onSave: (String, String, String, String, List<Int>) -> Unit, onDelete: (HospitalAppointment) -> Unit) {
     val context = LocalContext.current
     var hospital by remember(existing) { mutableStateOf(existing?.hospital ?: "") }
     var date by remember(existing, initialDate) { mutableStateOf(existing?.date ?: initialDate ?: SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(System.currentTimeMillis() + 86400000L))) }
     var time by remember(existing) { mutableStateOf(existing?.time ?: "09:00") }
     var memo by remember(existing) { mutableStateOf(existing?.memo ?: "") }
-    var status by remember(existing, initialStatus) { mutableStateOf(existing?.status ?: initialStatus ?: "예정") }
-    var statusMenu by remember { mutableStateOf(false) }
+    val reminderOptions = listOf(
+        "알림 없음" to emptyList<Int>(),
+        "하루 전" to listOf(1440),
+        "2시간 전" to listOf(120),
+        "30분 전" to listOf(30),
+        "하루 전 + 2시간 전" to listOf(1440, 120)
+    )
+    var reminderChoice by remember(existing) {
+        mutableStateOf(reminderOptions.firstOrNull { it.second == existing?.reminderOffsets }?.first ?: "2시간 전")
+    }
+    var reminderMenu by remember { mutableStateOf(false) }
 
     fun showDatePicker() {
         val calendar = java.util.Calendar.getInstance()
-        try {
-            val parsed = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(date)
-            if (parsed != null) calendar.time = parsed
-        } catch (_: Exception) { }
+        try { SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(date)?.let { calendar.time = it } } catch (_: Exception) { }
         DatePickerDialog(context, { _, year, month, day ->
             date = String.format(Locale.KOREA, "%04d.%02d.%02d", year, month + 1, day)
         }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH),
             calendar.get(java.util.Calendar.DAY_OF_MONTH)).show()
     }
-
     fun showTimePicker() {
         val parts = time.split(":")
         val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
@@ -2051,36 +2056,103 @@ private fun AppointmentDialog(existing: HospitalAppointment?, initialDate: Strin
         }, hour, minute, true).show()
     }
 
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "병원 일정 등록" else "병원 일정 수정") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(value = hospital, onValueChange = { hospital = it }, label = { Text("병원명") }, singleLine = true)
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "병원 예약 등록" else "병원 예약 수정") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+            OutlinedTextField(value = hospital, onValueChange = { hospital = it }, label = { Text("병원명") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("날짜 (YYYY.MM.DD)") }, singleLine = true, modifier = Modifier.weight(1f))
-                IconButton(onClick = { showDatePicker() }) {
-                    Icon(Icons.Default.DateRange, contentDescription = "달력에서 날짜 선택", tint = Green)
-                }
+                IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "달력에서 날짜 선택", tint = Green) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("시간 (HH:MM)") }, singleLine = true, modifier = Modifier.weight(1f))
-                IconButton(onClick = { showTimePicker() }) {
-                    Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green)
-                }
+                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("예약 시간 (HH:MM)") }, singleLine = true, modifier = Modifier.weight(1f))
+                IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green) }
             }
-            OutlinedTextField(value = memo, onValueChange = { memo = it }, label = { Text("진료 내용 / 메모") }, singleLine = true)
-            if (existing != null || initialStatus != null) {
-                Box {
-                    OutlinedButton(onClick = { statusMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("진료 상태: $status") }
-                    DropdownMenu(expanded = statusMenu, onDismissRequest = { statusMenu = false }) {
-                        listOf("예정", "진료 완료", "미방문", "취소").forEach { option ->
-                            DropdownMenuItem(text = { Text(option) }, onClick = { status = option; statusMenu = false })
-                        }
+            OutlinedTextField(value = memo, onValueChange = { memo = it }, label = { Text("진료 내용 / 메모") }, modifier = Modifier.fillMaxWidth())
+            Text("진료 상태: 확인", color = Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Box {
+                OutlinedButton(onClick = { reminderMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("예약 알림: $reminderChoice")
+                }
+                DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
+                    reminderOptions.forEach { option ->
+                        DropdownMenuItem(text = { Text(option.first) }, onClick = { reminderChoice = option.first; reminderMenu = false })
                     }
                 }
             }
-            Text("달력과 시계 아이콘을 누르면 날짜와 시간을 선택할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
-            Text("저장하면 지정한 날짜와 시간에 알림을 설정합니다.", color = Color.Gray, fontSize = 11.sp)
+            Text("알림은 예약 시간 기준으로 설정합니다. 알림 없음도 선택할 수 있습니다.", color = Color.Gray, fontSize = 11.sp)
             if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("일정 삭제", color = Color.Red) }
         } },
-        confirmButton = { TextButton(onClick = { if (hospital.isNotBlank()) onSave(hospital.trim(), date.trim(), time.trim(), memo.trim(), status) }) { Text("저장") } },
+        confirmButton = {
+            TextButton(onClick = {
+                val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
+                val validDate = try { fmt.parse("$date $time") != null } catch (_: Exception) { false }
+                if (hospital.isNotBlank() && validDate) onSave(hospital.trim(), date.trim(), time.trim(), memo.trim(),
+                    reminderOptions.first { it.first == reminderChoice }.second)
+            }) { Text("저장") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
+}
+
+@Composable
+private fun DailyEntryDialog(existing: DailyEntry?, kind: String, initialDate: String, onDismiss: () -> Unit,
+    onSave: (String, String, String, String, Int?) -> Unit, onDelete: (DailyEntry) -> Unit) {
+    val context = LocalContext.current
+    var date by remember(existing, initialDate) { mutableStateOf(existing?.date ?: initialDate) }
+    var time by remember(existing) { mutableStateOf(existing?.time ?: SimpleDateFormat("HH:mm", Locale.KOREA).format(Date())) }
+    var title by remember(existing) { mutableStateOf(existing?.title ?: "") }
+    var body by remember(existing) { mutableStateOf(existing?.body ?: "") }
+    val reminderOptions = listOf("알림 없음" to null, "30분 전" to 30, "2시간 전" to 120, "하루 전" to 1440)
+    var reminderChoice by remember(existing) {
+        mutableStateOf(reminderOptions.firstOrNull { it.second == existing?.reminderMinutes }?.first ?: "알림 없음")
+    }
+    var reminderMenu by remember { mutableStateOf(false) }
+    fun showDatePicker() {
+        val calendar = Calendar.getInstance()
+        try { SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(date)?.let { calendar.time = it } } catch (_: Exception) { }
+        DatePickerDialog(context, { _, year, month, day ->
+            date = String.format(Locale.KOREA, "%04d.%02d.%02d", year, month + 1, day)
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+    }
+    fun showTimePicker() {
+        val parts = time.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 12
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        TimePickerDialog(context, { _, h, m -> time = String.format(Locale.KOREA, "%02d:%02d", h, m) }, hour, minute, true).show()
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existing == null) "$kind 작성" else "$kind 수정") },
+        text = { Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("날짜") }, modifier = Modifier.weight(1f), singleLine = true)
+                IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("작성 시간") }, modifier = Modifier.weight(1f), singleLine = true)
+                IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green) }
+            }
+            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("제목 (선택)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = body, onValueChange = { body = it }, label = { Text(if (kind == "건강 일기") "오늘의 건강 일기" else "메모 내용") },
+                modifier = Modifier.fillMaxWidth(), minLines = 4, maxLines = 8)
+            if (kind == "간단 메모") {
+                Box {
+                    OutlinedButton(onClick = { reminderMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("메모 알림: $reminderChoice") }
+                    DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
+                        reminderOptions.forEach { option ->
+                            DropdownMenuItem(text = { Text(option.first) }, onClick = { reminderChoice = option.first; reminderMenu = false })
+                        }
+                    }
+                }
+            } else {
+                Text("건강 일기는 알림 없이 기록됩니다.", color = Color.Gray, fontSize = 11.sp)
+            }
+            if (existing != null) TextButton(onClick = { onDelete(existing) }) { Text("기록 삭제", color = Color.Red) }
+        } },
+        confirmButton = {
+            TextButton(onClick = {
+                val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
+                val validDate = try { fmt.parse("$date $time") != null } catch (_: Exception) { false }
+                val reminder = if (kind == "간단 메모") reminderOptions.first { it.first == reminderChoice }.second else null
+                if (validDate && body.isNotBlank()) onSave(date.trim(), time.trim(), title.trim(), body.trim(), reminder)
+            }) { Text("저장") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
 }
