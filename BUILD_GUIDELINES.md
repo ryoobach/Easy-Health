@@ -44,3 +44,11 @@
 
 ## 7. 재개 절차
 새 대화나 장기간 중단 후에는 “빌드 가이드와 빌드로그 숙지해”라는 요청을 기준으로 이 문서와 저장소 로그를 먼저 확인하고, 마지막 진행 상황과 미해결 문제부터 이어갑니다.
+
+
+## Android signing-key backup rule
+
+- GitHub Actions cache is temporary and must never be the only copy of an Android signing key.
+- Keep the established keystore in a separately protected backup and provision CI from an encrypted GitHub Actions secret or equivalent secure secret store.
+- Never generate a replacement key automatically when the established key is unavailable. Stop the build and preserve in-place update compatibility.
+- Before every release build, verify the signing certificate SHA-256 against the established fingerprint.
