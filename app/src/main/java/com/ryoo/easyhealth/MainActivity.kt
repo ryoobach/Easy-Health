@@ -97,7 +97,7 @@ data class VitalRecord(
 
 
 
-private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null, val wakeTime: String = "", val breakfastTime: String = "", val lunchTime: String = "", val dinnerTime: String = "", val bedtime: String = "", val weightKg: Double? = null)
+private data class PersonProfile(val name: String, val sex: String = "", val age: Int? = null, val heightCm: Double? = null, val wakeTime: String = "", val breakfastTime: String = "", val lunchTime: String = "", val dinnerTime: String = "", val bedtime: String = "")
 
 private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
     val array = JSONArray()
@@ -105,7 +105,7 @@ private fun encodePeopleProfiles(profiles: Map<String, PersonProfile>): String {
         array.put(JSONObject().put("name", p.name).put("sex", p.sex)
             .put("age", p.age ?: JSONObject.NULL).put("heightCm", p.heightCm ?: JSONObject.NULL)
             .put("wakeTime", p.wakeTime).put("breakfastTime", p.breakfastTime).put("lunchTime", p.lunchTime)
-            .put("dinnerTime", p.dinnerTime).put("bedtime", p.bedtime).put("weightKg", p.weightKg ?: JSONObject.NULL))
+            .put("dinnerTime", p.dinnerTime).put("bedtime", p.bedtime))
     }
     return array.toString()
 }
@@ -244,30 +244,82 @@ private fun riskFor(type: String, value: String, profile: PersonProfile? = null)
     }
 }
 
-data class HospitalAppointment(val id: Int, val hospital: String, val date: String, val time: String, val memo: String, val status: String = "예정")
+data class HospitalAppointment(val id: Int, val hospital: String, val date: String, val time: String, val memo: String, val status: String = "확인", val reminderOffsets: List<Int> = listOf(120))
+
+data class DailyEntry(val id: Int, val kind: String, val date: String, val time: String, val title: String, val body: String, val reminderMinutes: Int? = null)
 
 private fun saveAppointments(context: Context, appointments: List<HospitalAppointment>) {
     val array = JSONArray()
-    appointments.forEach { a -> array.put(JSONObject().put("id", a.id).put("hospital", a.hospital).put("date", a.date).put("time", a.time).put("memo", a.memo).put("status", a.status)) }
+    appointments.forEach { a -> array.put(JSONObject().put("id", a.id).put("hospital", a.hospital).put("date", a.date).put("time", a.time).put("memo", a.memo).put("status", a.status).put("reminderOffsets", JSONArray(a.reminderOffsets))) }
     context.getSharedPreferences("easy_health", Context.MODE_PRIVATE).edit().putString("appointments", array.toString()).apply()
 }
+private fun appointmentAlarmRequestCode(id: Int, index: Int): Int =
+    ((id.toLong() * 4L + index.toLong()) % Int.MAX_VALUE).toInt()
+
 private fun scheduleAppointmentReminder(context: Context, a: HospitalAppointment) {
     val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
-    val at = fmt.parse("\${a.date} \${a.time}") ?: return
-    val intent = android.content.Intent(context, AppointmentReminderReceiver::class.java).apply {
-        putExtra("appointment_id", a.id); putExtra("hospital", a.hospital); putExtra("memo", a.memo)
-    }
-    val pi = android.app.PendingIntent.getBroadcast(context, a.id, intent,
-        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+    val at = try { fmt.parse("${a.date} ${a.time}")?.time } catch (_: Exception) { null } ?: return
     val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-    alarm.cancel(pi)
-    if (at.time > System.currentTimeMillis()) alarm.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at.time, pi)
+    (0..3).forEach { index ->
+        val pending = android.app.PendingIntent.getBroadcast(context, appointmentAlarmRequestCode(a.id, index),
+            android.content.Intent(context, AppointmentReminderReceiver::class.java),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+        alarm.cancel(pending)
+    }
+    a.reminderOffsets.forEachIndexed { index, minutes ->
+        val triggerAt = at - minutes * 60_000L
+        if (triggerAt > System.currentTimeMillis()) {
+            val intent = android.content.Intent(context, AppointmentReminderReceiver::class.java).apply {
+                putExtra("appointment_id", a.id)
+                putExtra("title", "병원 예약 알림")
+                putExtra("body", "${a.hospital} · ${a.date} ${a.time}" + if (a.memo.isBlank()) "" else " · ${a.memo}")
+            }
+            val pending = android.app.PendingIntent.getBroadcast(context, appointmentAlarmRequestCode(a.id, index), intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+            alarm.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        }
+    }
 }
 private fun cancelAppointmentReminder(context: Context, id: Int) {
-    val intent = android.content.Intent(context, AppointmentReminderReceiver::class.java)
-    val pi = android.app.PendingIntent.getBroadcast(context, id, intent,
+    val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+    (0..3).forEach { index ->
+        val pending = android.app.PendingIntent.getBroadcast(context, appointmentAlarmRequestCode(id, index),
+            android.content.Intent(context, AppointmentReminderReceiver::class.java),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+        alarm.cancel(pending)
+    }
+}
+private fun saveDailyEntries(context: Context, entries: List<DailyEntry>) {
+    val array = JSONArray()
+    entries.forEach { entry ->
+        array.put(JSONObject().put("id", entry.id).put("kind", entry.kind).put("date", entry.date)
+            .put("time", entry.time).put("title", entry.title).put("body", entry.body)
+            .put("reminderMinutes", entry.reminderMinutes ?: JSONObject.NULL))
+    }
+    context.getSharedPreferences("easy_health", Context.MODE_PRIVATE).edit().putString("daily_entries", array.toString()).apply()
+}
+private fun dailyEntryAlarmRequestCode(id: Int): Int = ((id.toLong() + 1_000_000_000L) % Int.MAX_VALUE).toInt()
+private fun cancelDailyEntryReminder(context: Context, id: Int) {
+    val pending = android.app.PendingIntent.getBroadcast(context, dailyEntryAlarmRequestCode(id),
+        android.content.Intent(context, AppointmentReminderReceiver::class.java),
         android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
-    (context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager).cancel(pi)
+    (context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager).cancel(pending)
+}
+private fun scheduleDailyEntryReminder(context: Context, entry: DailyEntry) {
+    cancelDailyEntryReminder(context, entry.id)
+    val minutes = entry.reminderMinutes ?: return
+    val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
+    val at = try { fmt.parse("${entry.date} ${entry.time}")?.time } catch (_: Exception) { null } ?: return
+    val triggerAt = at - minutes * 60_000L
+    if (triggerAt <= System.currentTimeMillis()) return
+    val intent = android.content.Intent(context, AppointmentReminderReceiver::class.java).apply {
+        putExtra("title", entry.title.ifBlank { entry.kind })
+        putExtra("body", "${entry.date} ${entry.time}" + if (entry.body.isBlank()) "" else " · ${entry.body}")
+    }
+    val pending = android.app.PendingIntent.getBroadcast(context, dailyEntryAlarmRequestCode(entry.id), intent,
+        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+    (context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager)
+        .setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pending)
 }
 
 class MainActivity : ComponentActivity() {
@@ -340,8 +392,7 @@ fun EasyHealthApp(context: Context) {
                         if (o.isNull("age")) null else o.optInt("age"),
                         if (o.isNull("heightCm")) null else o.optDouble("heightCm"),
                         o.optString("wakeTime", ""), o.optString("breakfastTime", ""), o.optString("lunchTime", ""),
-                        o.optString("dinnerTime", ""), o.optString("bedtime", ""),
-                        if (o.isNull("weightKg")) null else o.optDouble("weightKg")))
+                        o.optString("dinnerTime", ""), o.optString("bedtime", "")))
                 }
             } catch (_: Exception) { }
             people.forEach { if (!containsKey(it)) put(it, PersonProfile(it)) }
@@ -365,13 +416,28 @@ fun EasyHealthApp(context: Context) {
         mutableStateListOf<HospitalAppointment>().apply {
             try {
                 val a = JSONArray(prefs.getString("appointments", "[]") ?: "[]")
-                for (i in 0 until a.length()) { val o = a.getJSONObject(i); add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"), o.optString("status", "예정"))) }
+                for (i in 0 until a.length()) { val o = a.getJSONObject(i); val rawOffsets = o.optJSONArray("reminderOffsets") ?: JSONArray("[120]"); val offsets = (0 until rawOffsets.length()).map { rawOffsets.optInt(it) }.filter { it > 0 }; add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"), o.optString("status", "확인"), offsets)) }
+            } catch (_: Exception) { }
+        }
+    }
+    val dailyEntries = remember {
+        mutableStateListOf<DailyEntry>().apply {
+            try {
+                val saved = JSONArray(prefs.getString("daily_entries", "[]") ?: "[]")
+                for (i in 0 until saved.length()) {
+                    val o = saved.getJSONObject(i)
+                    add(DailyEntry(o.optInt("id"), o.optString("kind", "건강 일기"), o.optString("date"), o.optString("time"),
+                        o.optString("title"), o.optString("body"), if (o.isNull("reminderMinutes")) null else o.optInt("reminderMinutes")))
+                }
             } catch (_: Exception) { }
         }
     }
     var showAppointmentDialog by remember { mutableStateOf(false) }
     var editingAppointment by remember { mutableStateOf<HospitalAppointment?>(null) }
-    var appointmentSection by remember { mutableStateOf("예정 일정") }
+    var showDailyEntryDialog by remember { mutableStateOf(false) }
+    var editingDailyEntry by remember { mutableStateOf<DailyEntry?>(null) }
+    var dailyEntryKind by remember { mutableStateOf("건강 일기") }
+    var dailyEntryDeleteTarget by remember { mutableStateOf<DailyEntry?>(null) }
     var selectedAppointmentDate by remember { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date())) }
     var appointmentInitialDate by remember { mutableStateOf<String?>(null) }
     var appointmentDeleteTarget by remember { mutableStateOf<HospitalAppointment?>(null) }
@@ -717,7 +783,7 @@ fun EasyHealthApp(context: Context) {
     val dateFormat = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA) }
     val personRecords = records.filter { it.person == selectedPerson }.sortedByDescending { it.timestamp }
     val selectedProfile = personProfiles[selectedPerson] ?: PersonProfile(selectedPerson)
-    val activeTypes = devices.filter { enabledDevices.contains(it.first) && registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
+    val activeTypes = devices.filter { registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
     // 리포트는 초기 화면 표시 설정과 분리하고, 등록된 기기의 측정 항목을 자동 포함합니다.
     val reportEnabledTypes = devices.filter { registeredDevices.contains(it.first) }.flatMap { it.second }.distinct()
     val reportRecords = personRecords.filter { reportEnabledTypes.contains(it.type) }
@@ -928,7 +994,7 @@ fun EasyHealthApp(context: Context) {
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(onClick = { showDeviceInfo = true }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
-                            Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(3.dp)); Text("블루투스 자동 가져오기", fontSize = 9.sp, lineHeight = 11.sp)
+                            Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(3.dp)); Text("측정값 자동 가져오기", fontSize = 9.sp, lineHeight = 11.sp)
                         }
                         OutlinedButton(onClick = { transferMode = "보내기"; showTransferDialog = true; transferStatus = "전송할 사용자와 기간을 선택해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 보내기", fontSize = 9.sp) }
                         OutlinedButton(onClick = { transferMode = "가져오기"; showTransferDialog = true; transferStatus = "가져올 준비를 해 주세요." }, modifier = Modifier.weight(1f).heightIn(min = 54.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text("데이터 가져오기", fontSize = 9.sp) }
@@ -1014,7 +1080,7 @@ fun EasyHealthApp(context: Context) {
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"} · ${selectedProfile.weightKg?.let { "${it}kg" } ?: "기준 체중 미입력"}", color = Color.Gray, fontSize = 11.sp)
+                    Text("대상자: ${selectedProfile.name} · ${selectedProfile.sex.ifBlank { "성별 미입력" }} · ${selectedProfile.age?.let { "${it}세" } ?: "나이 미입력"} · ${selectedProfile.heightCm?.let { "${it}cm" } ?: "키 미입력"}", color = Color.Gray, fontSize = 11.sp)
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
@@ -1487,7 +1553,7 @@ fun EasyHealthApp(context: Context) {
                                         selectedPerson = person; prefs.edit().putString("selected_person", person).apply(); showPeopleDialog = false
                                     }) {
                                         Text(person, color = Ink, fontWeight = FontWeight.SemiBold)
-                                        Text(listOf(profile.sex, profile.age?.let { "${it}세" }, profile.heightCm?.let { "${it}cm" }, profile.weightKg?.let { "${it}kg" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "추가 정보 없음" }, color = Color.Gray, fontSize = 11.sp)
+                                        Text(listOf(profile.sex, profile.age?.let { "${it}세" }, profile.heightCm?.let { "${it}cm" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "추가 정보 없음" }, color = Color.Gray, fontSize = 11.sp)
                                     }
                                     TextButton(onClick = { personEditing = profile; showPeopleDialog = false }) { Text("수정") }
                                     TextButton(onClick = { personDeleteTarget = person; showPeopleDialog = false }, enabled = people.size > 1) { Text("삭제", color = Color.Red) }
@@ -1702,7 +1768,7 @@ fun EasyHealthApp(context: Context) {
     }
     if (showDeviceInfo) {
         val savedMeters = JSONArray(prefs.getString("bluetooth_devices", "[]") ?: "[]")
-        AlertDialog(onDismissRequest = { showDeviceInfo = false }, title = { Text("블루투스 자동 가져오기") },
+        AlertDialog(onDismissRequest = { showDeviceInfo = false }, title = { Text("측정값 자동 가져오기") },
             text = {
                 Column(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(bluetoothStatus, color = Color.Gray, fontSize = 12.sp)
@@ -1747,7 +1813,6 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
     var sex by remember(existing) { mutableStateOf(existing.sex) }
     var age by remember(existing) { mutableStateOf(existing.age?.toString() ?: "") }
     var height by remember(existing) { mutableStateOf(existing.heightCm?.toString() ?: "") }
-    var weight by remember(existing) { mutableStateOf(existing.weightKg?.toString() ?: "") }
     var wakeTime by remember(existing) { mutableStateOf(existing.wakeTime) }
     var breakfastTime by remember(existing) { mutableStateOf(existing.breakfastTime) }
     var lunchTime by remember(existing) { mutableStateOf(existing.lunchTime) }
@@ -1769,8 +1834,6 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = height, onValueChange = { height = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("키 (cm)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = weight, onValueChange = { weight = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) }, label = { Text("최초 기준 체중 (kg)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("생활 시간", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 ProfileTimeRow("기상 시간", wakeTime) { wakeTime = it }
                 ProfileTimeRow("아침 식사 시간", breakfastTime) { breakfastTime = it }
@@ -1778,16 +1841,15 @@ private fun PersonProfileDialog(existing: PersonProfile, onDismiss: () -> Unit, 
                 ProfileTimeRow("저녁 식사 시간", dinnerTime) { dinnerTime = it }
                 ProfileTimeRow("취침 시간", bedtime) { bedtime = it }
                 Text("입력한 식사 기준시간보다 이르면 식전, 지나면 식후로 표시합니다. 기상 후 아침 식사 전 구간은 공복으로, 취침시간 전후 1시간은 취침전으로 표시합니다.", color = Color.Gray, fontSize = 10.sp)
-                Text("키와 최초 기준 체중은 개인별 건강 변화 분석에 사용합니다. 성별과 나이는 개인별 리포트 해석에 활용합니다.", color = Color.Gray, fontSize = 11.sp)
+                Text("성별·나이·키는 개인별 건강 분석에 활용하며, 체중은 측정 기록으로 관리합니다.", color = Color.Gray, fontSize = 11.sp)
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val a = age.toIntOrNull()
                 val h = height.toDoubleOrNull()
-                val w = weight.toDoubleOrNull()
-                if (name.trim().isNotBlank() && (age.isBlank() || a in 0..120) && (height.isBlank() || (h != null && h in 30.0..250.0)) && (weight.isBlank() || (w != null && w in 20.0..400.0))) {
-                    onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime, w))
+                if (name.trim().isNotBlank() && sex in listOf("남성", "여성") && a in 1..120 && h != null && h in 100.0..250.0) {
+                    onSave(PersonProfile(name.trim(), sex, a, h, wakeTime, breakfastTime, lunchTime, dinnerTime, bedtime))
                 }
             }) { Text("저장") }
         },
