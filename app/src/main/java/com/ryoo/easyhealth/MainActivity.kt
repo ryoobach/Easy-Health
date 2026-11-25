@@ -2143,7 +2143,6 @@ private fun AppointmentDialog(existing: HospitalAppointment?, initialDate: Strin
     var time by remember(existing) { mutableStateOf(existing?.time ?: "09:00") }
     var memo by remember(existing) { mutableStateOf(existing?.memo ?: "") }
     val reminderOptions = listOf(
-        "알림 없음" to emptyList<Int>(),
         "하루 전" to listOf(1440),
         "2시간 전" to listOf(120),
         "30분 전" to listOf(30),
