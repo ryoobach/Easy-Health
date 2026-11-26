@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 46
-        versionName = "1.46"
+        versionName = "1.46" // Easy Health 1.46 test build trigger
         manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.46 TEST" else "Easy Health"
         buildConfigField("String", "BUILD_DATE", "\"${LocalDate.now()}\"")
     }
