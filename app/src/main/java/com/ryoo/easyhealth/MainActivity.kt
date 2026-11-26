@@ -857,16 +857,17 @@ fun EasyHealthApp(context: Context) {
             )
         }
         "전체" -> {
-            val firstReading = reportGlucoseRecords.minOfOrNull { it.timestamp }
-            if (firstReading == null) emptyList()
-            else {
+            reportGlucoseRecords.minOfOrNull { it.timestamp }?.let { firstReading ->
                 val points = mutableListOf<Pair<String, TimeWeightedGlucoseEstimate?>>()
-                var windowStart = firstReading
+                var windowStart: Long = firstReading
                 while (windowStart < now) {
-                    val windowEnd = Calendar.getInstance().apply {
-                        timeInMillis = windowStart
-                        add(Calendar.MONTH, 3)
-                    }.timeInMillis.coerceAtMost(now)
+                    val windowEnd: Long = minOf(
+                        Calendar.getInstance().apply {
+                            timeInMillis = windowStart
+                            add(Calendar.MONTH, 3)
+                        }.timeInMillis,
+                        now
+                    )
                     val label = "${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowStart))} ~ ${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowEnd))}"
                     points.add(label to calculateTimeWeightedGlucoseEstimate(
                         records = reportGlucoseRecords,
@@ -879,7 +880,7 @@ fun EasyHealthApp(context: Context) {
                     windowStart = windowEnd
                 }
                 points
-            }
+            } ?: emptyList()
         }
         else -> listOf("최근 3개월 참고" to reportA1cEstimate)
     }
