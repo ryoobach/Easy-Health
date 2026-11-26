@@ -839,20 +839,30 @@ fun EasyHealthApp(context: Context) {
     )
     val a1cReportPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
         "3개월" -> (2 downTo 0).map { monthOffset ->
-            val end = Calendar.getInstance().apply {
+            // 각 월의 추정치는 해당 월과 직전 두 달, 총 3개월의 시간 가중 혈당으로 계산합니다.
+            val targetMonthStart = Calendar.getInstance().apply {
                 timeInMillis = now
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
                 add(Calendar.MONTH, -monthOffset)
             }.timeInMillis
-            val start = Calendar.getInstance().apply {
-                timeInMillis = end
-                add(Calendar.MONTH, -1)
+            val windowStart = Calendar.getInstance().apply {
+                timeInMillis = targetMonthStart
+                add(Calendar.MONTH, -2)
             }.timeInMillis
-            val label = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(start))
+            val windowEnd = if (monthOffset == 0) now else Calendar.getInstance().apply {
+                timeInMillis = targetMonthStart
+                add(Calendar.MONTH, 1)
+            }.timeInMillis
+            val label = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(targetMonthStart))
             label to calculateTimeWeightedGlucoseEstimate(
                 records = reportGlucoseRecords,
                 nowMillis = now,
-                windowStartMillis = start,
-                windowEndMillis = end,
+                windowStartMillis = windowStart,
+                windowEndMillis = windowEnd,
                 minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
             )
         }
@@ -1105,6 +1115,13 @@ fun EasyHealthApp(context: Context) {
                 "일정·일기" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("날짜를 선택하면 새 기록을 입력하고, 해당 날짜의 기록을 시간순으로 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
+                    val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
+                    HospitalCalendar(
+                        selectedDate = selectedAppointmentDate,
+                        markedDates = markedDates,
+                        onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = true },
+                        onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true }
+                    )
                     if (showDateEntryActions) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1243,13 +1260,6 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                     }
-                    val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
-                    HospitalCalendar(
-                        selectedDate = selectedAppointmentDate,
-                        markedDates = markedDates,
-                        onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = true },
-                        onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true }
-                    )
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
@@ -1671,6 +1681,7 @@ fun EasyHealthApp(context: Context) {
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    Text("하루를 살더라도 건강하게", color = Green, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                     // 1행: 앱 아이콘 + 앱 이름 + 버전
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Image(
