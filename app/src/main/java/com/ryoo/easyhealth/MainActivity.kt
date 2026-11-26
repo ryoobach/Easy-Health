@@ -440,6 +440,7 @@ fun EasyHealthApp(context: Context) {
     var showDailyEntryDialog by remember { mutableStateOf(false) }
     var editingDailyEntry by remember { mutableStateOf<DailyEntry?>(null) }
     var dailyEntryKind by remember { mutableStateOf("건강 일기") }
+    var selectedEntryTab by remember { mutableStateOf("병원예약") }
     var dailyEntryDeleteTarget by remember { mutableStateOf<DailyEntry?>(null) }
     var selectedAppointmentDate by remember { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date())) }
     var showDateEntryActions by remember { mutableStateOf(false) }
@@ -782,7 +783,11 @@ fun EasyHealthApp(context: Context) {
         else transferPermissionLauncher.launch(missing.toTypedArray())
     }
     DisposableEffect(Unit) { onDispose { bluetoothClient.close(); recordTransfer.close() } }
-    var showAppInfo by remember { mutableStateOf(false) }
+    var showAppInfo by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2_000)
+        showAppInfo = false
+    }
     var showHelpDialog by remember { mutableStateOf(false) }
     var ownerNameInput by remember { mutableStateOf(prefs.getString("owner_name", "") ?: "") }
     var showOwnerSetup by remember { mutableStateOf(ownerNameInput.isBlank()) }
@@ -832,6 +837,52 @@ fun EasyHealthApp(context: Context) {
         windowEndMillis = now,
         minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
     )
+    val a1cReportPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
+        "3개월" -> (2 downTo 0).map { monthOffset ->
+            val end = Calendar.getInstance().apply {
+                timeInMillis = now
+                add(Calendar.MONTH, -monthOffset)
+            }.timeInMillis
+            val start = Calendar.getInstance().apply {
+                timeInMillis = end
+                add(Calendar.MONTH, -1)
+            }.timeInMillis
+            val label = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(start))
+            label to calculateTimeWeightedGlucoseEstimate(
+                records = reportGlucoseRecords,
+                nowMillis = now,
+                windowStartMillis = start,
+                windowEndMillis = end,
+                minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
+            )
+        }
+        "전체" -> {
+            val firstReading = reportGlucoseRecords.minOfOrNull { it.timestamp }
+            if (firstReading == null) emptyList()
+            else {
+                val points = mutableListOf<Pair<String, TimeWeightedGlucoseEstimate?>>()
+                var windowStart = firstReading
+                while (windowStart < now) {
+                    val windowEnd = Calendar.getInstance().apply {
+                        timeInMillis = windowStart
+                        add(Calendar.MONTH, 3)
+                    }.timeInMillis.coerceAtMost(now)
+                    val label = "${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowStart))} ~ ${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowEnd))}"
+                    points.add(label to calculateTimeWeightedGlucoseEstimate(
+                        records = reportGlucoseRecords,
+                        nowMillis = now,
+                        windowStartMillis = windowStart,
+                        windowEndMillis = windowEnd,
+                        minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
+                    ))
+                    if (windowEnd <= windowStart) break
+                    windowStart = windowEnd
+                }
+                points
+            }
+        }
+        else -> listOf("최근 3개월 참고" to reportA1cEstimate)
+    }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
         Scaffold(
@@ -1053,26 +1104,40 @@ fun EasyHealthApp(context: Context) {
                 "일정·일기" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("날짜를 선택하면 새 기록을 입력하고, 해당 날짜의 기록을 시간순으로 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
-                    val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
-                    HospitalCalendar(
-                        selectedDate = selectedAppointmentDate,
-                        markedDates = markedDates,
-                        onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = true },
-                        onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true }
-                    )
                     if (showDateEntryActions) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${selectedAppointmentDate} 새 기록 입력", color = Ink, fontWeight = FontWeight.Bold)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    OutlinedButton(onClick = { appointmentInitialDate = selectedAppointmentDate; editingAppointment = null; showAppointmentDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                                        Text("병원예약", fontSize = 12.sp, maxLines = 1, softWrap = false)
-                                    }
-                                    OutlinedButton(onClick = { dailyEntryKind = "건강 일기"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                                        Text("건강일기", fontSize = 12.sp, maxLines = 1, softWrap = false)
-                                    }
-                                    OutlinedButton(onClick = { dailyEntryKind = "간단 메모"; editingDailyEntry = null; showDailyEntryDialog = true }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                                        Text("간단메모", fontSize = 12.sp, maxLines = 1, softWrap = false)
+                                ScrollableTabRow(
+                                    selectedTabIndex = listOf("병원예약", "건강일기", "간단메모").indexOf(selectedEntryTab).coerceAtLeast(0),
+                                    containerColor = Color.Transparent,
+                                    edgePadding = 0.dp
+                                ) {
+                                    listOf("병원예약", "건강일기", "간단메모").forEach { kind ->
+                                        Tab(
+                                            selected = selectedEntryTab == kind,
+                                            onClick = {
+                                                selectedEntryTab = kind
+                                                when (kind) {
+                                                    "병원예약" -> {
+                                                        appointmentInitialDate = selectedAppointmentDate
+                                                        editingAppointment = null
+                                                        showAppointmentDialog = true
+                                                    }
+                                                    "건강일기" -> {
+                                                        dailyEntryKind = "건강 일기"
+                                                        editingDailyEntry = null
+                                                        showDailyEntryDialog = true
+                                                    }
+                                                    else -> {
+                                                        dailyEntryKind = "간단 메모"
+                                                        editingDailyEntry = null
+                                                        showDailyEntryDialog = true
+                                                    }
+                                                }
+                                            },
+                                            text = { Text(kind, fontSize = 12.sp) }
+                                        )
                                     }
                                 }
                             }
@@ -1090,7 +1155,11 @@ fun EasyHealthApp(context: Context) {
                             item.appointment?.let { a ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth().combinedClickable(
-                                        onClick = { },
+                                        onClick = {
+                                            editingAppointment = a
+                                            appointmentInitialDate = a.date
+                                            showAppointmentDialog = true
+                                        },
                                         onLongClick = {
                                             editingAppointment = a
                                             appointmentInitialDate = a.date
@@ -1109,14 +1178,18 @@ fun EasyHealthApp(context: Context) {
                                         Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(a.memo.ifBlank { "진료 내용 미입력" }, color = Color.Gray, fontSize = 12.sp)
                                         Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
-                                        Text("길게 눌러 수정", color = Color.Gray, fontSize = 10.sp)
+                                        Text("눌러서 수정", color = Color.Gray, fontSize = 10.sp)
                                     }
                                 }
                             }
                             item.entry?.let { entry ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth().combinedClickable(
-                                        onClick = { },
+                                        onClick = {
+                                            editingDailyEntry = entry
+                                            dailyEntryKind = entry.kind
+                                            showDailyEntryDialog = true
+                                        },
                                         onLongClick = {
                                             editingDailyEntry = entry
                                             dailyEntryKind = entry.kind
@@ -1135,7 +1208,7 @@ fun EasyHealthApp(context: Context) {
                                         if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(entry.body, color = Color.Gray, fontSize = 12.sp)
                                         if (entry.reminderMinutes != null) Text("알림 설정됨", color = Color.Gray, fontSize = 10.sp)
-                                        Text("길게 눌러 수정", color = Color.Gray, fontSize = 10.sp)
+                                        Text("눌러서 수정", color = Color.Gray, fontSize = 10.sp)
                                     }
                                 }
                             }
@@ -1169,6 +1242,13 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                     }
+                    val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
+                    HospitalCalendar(
+                        selectedDate = selectedAppointmentDate,
+                        markedDates = markedDates,
+                        onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = true },
+                        onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true }
+                    )
                 }
                 "리포트" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("건강 리포트", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
@@ -1193,21 +1273,29 @@ fun EasyHealthApp(context: Context) {
                     }, color = Color.Gray, fontSize = 12.sp)
                     if (reportEnabledTypes.contains("혈당") || reportGlucoseRecords.isNotEmpty()) {
                         Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("당화혈색소 추정치 · 최근 3개월", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    reportA1cEstimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
-                                    color = reportA1cEstimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
-                                    fontSize = 24.sp, fontWeight = FontWeight.Bold
+                                    if (reportPeriod == "3개월") "당화혈색소 추정치 · 월별" else if (reportPeriod == "전체") "당화혈색소 추정치 · 3개월 단위" else "당화혈색소 추정치 · 최근 3개월 참고",
+                                    color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp
                                 )
-                                Text(
-                                    reportA1cEstimate?.let {
-                                        "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간 · 기간 ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.firstTimestamp))}~${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.lastTimestamp))}"
-                                    } ?: "선택한 기간의 측정 횟수, 측정 기간 또는 유효 시간 구간이 부족합니다.",
-                                    color = Color.Gray, fontSize = 11.sp
-                                )
+                                if (a1cReportPoints.isEmpty()) Text("혈당 측정 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                                a1cReportPoints.forEach { (periodLabel, estimate) ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(periodLabel, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            estimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
+                                            color = estimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
+                                            fontSize = 22.sp, fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            estimate?.let {
+                                                "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
+                                            } ?: "해당 구간의 측정 횟수, 측정 기간 또는 유효 시간 구간이 부족합니다.",
+                                            color = Color.Gray, fontSize = 10.sp
+                                        )
+                                    }
+                                }
                                 Text("실제 검사실 당화혈색소가 아닌 참고용 추정치입니다.", color = Color.Gray, fontSize = 10.sp)
-                                Text("혈당측정을 많이 할수록 당화혈색소 추정치가 정확합니다.", color = Color.Gray, fontSize = 10.sp)
                             }
                         }
                     }
@@ -1367,7 +1455,7 @@ fun EasyHealthApp(context: Context) {
                     }
                     
                 }
-                else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                else -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("기기 설정", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     if (registeredDevices.isEmpty()) {
                         Text("등록된 기기가 없습니다.", color = Color.Gray, modifier = Modifier.padding(vertical = 18.dp))

@@ -23,4 +23,5 @@
 | 2026-11-25 | 1.41 TEST | `feature/v1.41-health-schedule-diary` | 빌드 대기 | 일정·일기 초기 화면은 날짜별 박스(최신순), 날짜 선택 시 해당 날짜 입력 영역과 기록을 표시하며 기록은 시간 오름차순. 버전 1.41 / versionCode 41 / 테스트 package `com.ryoo.easyhealth.test141`. |
 
 | 2026-11-26 | 1.42 TEST | `feature/v1.41-health-schedule-diary` | 실패 | CI run 45716862348: `app/build.gradle.kts` 23행의 문자열 보간 escape 오류로 Gradle Kotlin DSL 컴파일 실패. 단위 테스트 실행 단계에서 중단, APK 생성 전 실패. 버전 1.42 소비 처리. 상세 원인: run 45716862348. |
-| 2026-11-26 | 1.43 TEST | `feature/v1.41-health-schedule-diary` | CI 시작 대기 | 1.42 실패 버전을 재사용하지 않고 versionName 1.43 / versionCode 43 / 테스트 package `com.ryoo.easyhealth.test143`으로 증가. Gradle 설정은 직전 정상 소스 기반으로 복구하고 문자열 보간 문법을 보존. 정식 앱과 데이터는 변경하지 않음. |
+| 2026-11-26 | 1.43 TEST | `feature/v1.41-health-schedule-diary` | 성공 | CI run 45719784375 성공. 단위 테스트, APK 빌드, 패키지/버전 메타데이터, 테스트 서명 검증 및 artifact 업로드 완료. artifact 15071522480. 물리 기기 설치·화면 동작은 미검증. 상세: [2026-11-26-v1.43-test-build.md](2026-11-26-v1.43-test-build.md) |
+| 2026-11-26 | 1.44 TEST | `feature/v1.41-health-schedule-diary` | 빌드 시작 대기 | versionName 1.44 / versionCode 44. 테스트 package `com.ryoo.easyhealth.test143` 유지로 1.43 TEST 앱 업데이트 호환성 확보. 시작 화면 2초 표시, 월별/분기별 A1c, 일정·일기 탭 편의성, 기기 목록 상단 간격 수정. |
