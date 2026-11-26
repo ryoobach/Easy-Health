@@ -27,4 +27,7 @@
 | 2026-11-26 | 1.44 TEST | `feature/v1.41-health-schedule-diary` | 빌드 시작 대기 | versionName 1.44 / versionCode 44. 테스트 package `com.ryoo.easyhealth.test143` 유지로 1.43 TEST 앱 업데이트 호환성 확보. 시작 화면 2초 표시, 월별/분기별 A1c, 일정·일기 탭 편의성, 기기 목록 상단 간격 수정. |
 
 | 2026-11-26 | 1.44 TEST | `feature/v1.41-health-schedule-diary` | 실패 | CI run 45747595098: `MainActivity.kt` 전체 기간 당화혈색소 3개월 구간 계산부에서 Kotlin nullable `Long?` 타입 오류로 `:app:compileDebugKotlin` 실패. 단위 테스트 컴파일 단계에서 중단, APK 미생성. 버전 1.44 소비 처리. 상세: [2026-11-26-v1.44-test-build.md](2026-11-26-v1.44-test-build.md) |
-| 2026-11-26 | 1.45 TEST | `feature/v1.41-health-schedule-diary` | 수정 및 빌드 준비 | 1.44 실패 원인 수정: 전체 기간 구간 시작·종료 시각을 명시적으로 non-null `Long`으로 처리. versionName 1.45 / versionCode 45. 테스트 package `com.ryoo.easyhealth.test143` 및 캐시된 테스트 서명키 유지. |
+| 2026-11-26 | 1.45 TEST | `feature/v1.41-health-schedule-diary` | 성공·설치 확인 | 사용자가 1.45 빌드 완료 및 휴대폰 설치, 기존 데이터 이전 성공을 확인. versionName 1.45 / versionCode 45. 테스트 package `com.ryoo.easyhealth.test143` 유지. CI run/artifact 식별자는 후속 기록에서 확인 가능한 경우에만 추가. |
+
+
+| 2026-11-26 | 1.46 TEST | `feature/v1.41-health-schedule-diary` | 구현 완료·빌드 대기 | versionName 1.46 / versionCode 46. 1.45 피드백 반영: 시작 정보 화면 건강 문구, 3개월 rolling HbA1c(각 월+직전 2개월), 일정·일기 달력 상단 배치. 테스트 package `com.ryoo.easyhealth.test143` 및 기존 테스트 서명키 유지. 상세: `2026-11-26-v1.46-test-build.md`. |
