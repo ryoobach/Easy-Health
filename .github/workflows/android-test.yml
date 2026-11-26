@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: easy-health-test-apk-v145
+  group: easy-health-test-apk-v146
   cancel-in-progress: false
 jobs:
   build-test:
@@ -65,9 +65,9 @@ jobs:
           echo "Version code: $VERSION_CODE"
           echo "Version name: $VERSION_NAME"
           test "$APP_ID" = "com.ryoo.easyhealth.test143"
-          test "$VERSION_CODE" = "45"
-          test "$VERSION_NAME" = "1.45"
-          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.45 TEST'
+          test "$VERSION_CODE" = "46"
+          test "$VERSION_NAME" = "1.46"
+          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.46 TEST'
       - name: Verify isolated test signature
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
@@ -81,10 +81,10 @@ jobs:
           test "$APK_SHA" != "$EXPECTED_PRODUCTION_SHA"
       - name: Package test APK and installation guide
         run: |
-          mkdir -p "Easy-Health-1.45-Test"
-          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.45-Test/Easy-Health-1.45-Test.apk"
-          printf "Easy Health 1.45 테스트 앱 설치 안내\\n\\n기존 Easy Health 1.37 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test143로 설치되므로 기존 앱과 함께 설치됩니다.\\n테스트 앱의 데이터는 기존 1.37 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.45-Test/설치안내.txt"
+          mkdir -p "Easy-Health-1.46-Test"
+          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.46-Test/Easy-Health-1.46-Test.apk"
+          printf "Easy Health 1.46 테스트 앱 설치 안내\\n\\n기존 Easy Health 1.37 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test143로 설치되므로 기존 앱과 함께 설치됩니다.\\n테스트 앱의 데이터는 기존 1.37 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.46-Test/설치안내.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: Easy-Health-1.45-Test
-          path: "Easy-Health-1.45-Test/*"
+          name: Easy-Health-1.46-Test
+          path: "Easy-Health-1.46-Test/*"
