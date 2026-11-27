@@ -1119,8 +1119,20 @@ fun EasyHealthApp(context: Context) {
                     HospitalCalendar(
                         selectedDate = selectedAppointmentDate,
                         markedDates = markedDates,
-                        onDateSelected = { selectedAppointmentDate = it; showDateEntryActions = true },
-                        onDateLongPressed = { selectedAppointmentDate = it; showDateEntryActions = true }
+                        onDateSelected = {
+                            selectedAppointmentDate = it
+                            showDateEntryActions = true
+                            appointmentInitialDate = it
+                            showAppointmentDialog = false
+                            showDailyEntryDialog = true
+                        },
+                        onDateLongPressed = {
+                            selectedAppointmentDate = it
+                            showDateEntryActions = true
+                            appointmentInitialDate = it
+                            showAppointmentDialog = false
+                            showDailyEntryDialog = true
+                        }
                     )
                     if (showDateEntryActions) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
@@ -1175,7 +1187,9 @@ fun EasyHealthApp(context: Context) {
                                     modifier = Modifier.fillMaxWidth().combinedClickable(
                                         onClick = {
                                             editingAppointment = a
+                                            selectedEntryTab = "병원예약"
                                             appointmentInitialDate = a.date
+                                            showDailyEntryDialog = false
                                             showAppointmentDialog = true
                                         },
                                         onLongClick = {
@@ -1206,6 +1220,8 @@ fun EasyHealthApp(context: Context) {
                                         onClick = {
                                             editingDailyEntry = entry
                                             dailyEntryKind = entry.kind
+                                            selectedEntryTab = if (entry.kind == "건강 일기") "건강일기" else "간단메모"
+                                            showAppointmentDialog = false
                                             showDailyEntryDialog = true
                                         },
                                         onLongClick = {
@@ -1731,45 +1747,74 @@ fun EasyHealthApp(context: Context) {
             confirmButton = { TextButton(onClick = { showHelpDialog = false }) { Text("닫기") } }
         )
     }
-    if (showAppointmentDialog) {
-        AppointmentDialog(existing = editingAppointment, initialDate = appointmentInitialDate, onDismiss = { showAppointmentDialog = false; appointmentInitialDate = null },
-            onSave = { hospital, date, time, memo, reminderOffsets ->
+    if (showAppointmentDialog || showDailyEntryDialog) {
+        ScheduleEntryDialog(
+            existingAppointment = editingAppointment.takeIf { showAppointmentDialog },
+            existingDailyEntry = editingDailyEntry.takeIf { showDailyEntryDialog },
+            initialDate = appointmentInitialDate ?: selectedAppointmentDate,
+            initialKind = if (showAppointmentDialog) "병원예약" else selectedEntryTab,
+            onDismiss = {
+                showAppointmentDialog = false
+                showDailyEntryDialog = false
+                appointmentInitialDate = null
+            },
+            onKindChange = { kind ->
+                selectedEntryTab = kind
+                if (kind == "건강일기") dailyEntryKind = "건강 일기"
+                if (kind == "간단메모") dailyEntryKind = "간단 메모"
+            },
+            onSaveAppointment = { hospital, date, time, memo, reminderOffsets ->
                 val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
                 val parsed = try { fmt.parse("$date $time") } catch (_: Exception) { null }
-                if (hospital.isNotBlank() && parsed != null && (editingAppointment != null || parsed.time > System.currentTimeMillis())) {
-                    editingAppointment?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
-                    val saved = HospitalAppointment(editingAppointment?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, "확인", reminderOffsets)
-                    appointments.add(saved); saveAppointments(context, appointments); scheduleAppointmentReminder(context, saved)
+                val currentEditing = editingAppointment?.takeIf { selectedEntryTab == "병원예약" }
+                if (hospital.isNotBlank() && parsed != null && (currentEditing != null || parsed.time > System.currentTimeMillis())) {
+                    currentEditing?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
+                    val saved = HospitalAppointment(currentEditing?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, "확인", reminderOffsets)
+                    appointments.add(saved)
+                    saveAppointments(context, appointments)
+                    scheduleAppointmentReminder(context, saved)
                     selectedAppointmentDate = date
                     appointmentInitialDate = null
                     if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                         (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 701)
                     showAppointmentDialog = false
+                    showDailyEntryDialog = false
+                    editingAppointment = null
+                    editingDailyEntry = null
                 }
             },
-            onDelete = { a -> appointmentDeleteTarget = a; showAppointmentDialog = false }
-        )
-    }
-    if (showDailyEntryDialog) {
-        DailyEntryDialog(existing = editingDailyEntry, kind = dailyEntryKind, initialDate = selectedAppointmentDate,
-            onDismiss = { showDailyEntryDialog = false },
-            onSave = { date, time, title, body, reminderMinutes ->
+            onSaveDailyEntry = { date, time, title, body, reminderMinutes ->
                 val parsed = try { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }.parse("$date $time") } catch (_: Exception) { null }
+                val expectedTab = if (editingDailyEntry?.kind == "건강 일기") "건강일기" else "간단메모"
+                val currentEditing = editingDailyEntry?.takeIf { selectedEntryTab == expectedTab }
                 if (parsed != null && body.isNotBlank()) {
-                    editingDailyEntry?.let { cancelDailyEntryReminder(context, it.id); dailyEntries.removeAll { old -> old.id == it.id } }
-                    val saved = DailyEntry(editingDailyEntry?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+                    currentEditing?.let { cancelDailyEntryReminder(context, it.id); dailyEntries.removeAll { old -> old.id == it.id } }
+                    val saved = DailyEntry(currentEditing?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
                         dailyEntryKind, date, time, title, body, if (dailyEntryKind == "간단 메모") reminderMinutes else null)
                     dailyEntries.add(saved)
                     saveDailyEntries(context, dailyEntries)
                     scheduleDailyEntryReminder(context, saved)
                     selectedAppointmentDate = date
+                    showAppointmentDialog = false
                     showDailyEntryDialog = false
+                    editingAppointment = null
+                    editingDailyEntry = null
+                    appointmentInitialDate = null
                     if (saved.reminderMinutes != null && android.os.Build.VERSION.SDK_INT >= 33 &&
                         context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                         (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 702)
                 }
             },
-            onDelete = { entry -> dailyEntryDeleteTarget = entry; showDailyEntryDialog = false }
+            onDeleteAppointment = { appointment ->
+                appointmentDeleteTarget = appointment
+                showAppointmentDialog = false
+                showDailyEntryDialog = false
+            },
+            onDeleteDailyEntry = { entry ->
+                dailyEntryDeleteTarget = entry
+                showAppointmentDialog = false
+                showDailyEntryDialog = false
+            }
         )
     }
     dailyEntryDeleteTarget?.let { target ->
@@ -2445,4 +2490,178 @@ private fun DailyEntryDialog(existing: DailyEntry?, kind: String, initialDate: S
             }) { Text("저장") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } })
+}
+
+@Composable
+private fun ScheduleEntryDialog(
+    existingAppointment: HospitalAppointment?,
+    existingDailyEntry: DailyEntry?,
+    initialDate: String,
+    initialKind: String,
+    onDismiss: () -> Unit,
+    onKindChange: (String) -> Unit,
+    onSaveAppointment: (String, String, String, String, List<Int>) -> Unit,
+    onSaveDailyEntry: (String, String, String, String, Int?) -> Unit,
+    onDeleteAppointment: (HospitalAppointment) -> Unit,
+    onDeleteDailyEntry: (DailyEntry) -> Unit
+) {
+    val context = LocalContext.current
+    fun normalizeKind(value: String): String = when (value) {
+        "병원예약", "병원 예약" -> "병원예약"
+        "건강일기", "건강 일기" -> "건강일기"
+        else -> "간단메모"
+    }
+    val firstKind = when {
+        existingAppointment != null -> "병원예약"
+        existingDailyEntry != null -> normalizeKind(existingDailyEntry.kind)
+        else -> normalizeKind(initialKind)
+    }
+    var entryKind by remember(existingAppointment, existingDailyEntry, initialDate, initialKind) { mutableStateOf(firstKind) }
+    var date by remember(existingAppointment, existingDailyEntry, initialDate) {
+        mutableStateOf(existingAppointment?.date ?: existingDailyEntry?.date ?: initialDate)
+    }
+    var time by remember(existingAppointment, existingDailyEntry) {
+        mutableStateOf(existingAppointment?.time ?: existingDailyEntry?.time ?: SimpleDateFormat("HH:mm", Locale.KOREA).format(Date()))
+    }
+    var title by remember(existingAppointment, existingDailyEntry) {
+        mutableStateOf(existingAppointment?.hospital ?: existingDailyEntry?.title ?: "")
+    }
+    var body by remember(existingAppointment, existingDailyEntry) {
+        mutableStateOf(existingAppointment?.memo ?: existingDailyEntry?.body ?: "")
+    }
+    val appointmentReminderOptions = listOf(
+        "알림 없음" to emptyList<Int>(),
+        "30분 전" to listOf(30),
+        "2시간 전" to listOf(120),
+        "하루 전" to listOf(1440),
+        "하루 전 + 2시간 전" to listOf(1440, 120)
+    )
+    val dailyReminderOptions = listOf("알림 없음" to null, "30분 전" to 30, "2시간 전" to 120, "하루 전" to 1440)
+    var reminderChoice by remember(existingAppointment, existingDailyEntry, initialKind) {
+        mutableStateOf(
+            existingAppointment?.let { saved -> appointmentReminderOptions.firstOrNull { it.second == saved.reminderOffsets }?.first }
+                ?: existingDailyEntry?.let { saved -> dailyReminderOptions.firstOrNull { it.second == saved.reminderMinutes }?.first }
+                ?: if (firstKind == "병원예약") "2시간 전" else "알림 없음"
+        )
+    }
+    var reminderMenu by remember { mutableStateOf(false) }
+
+    fun showDatePicker() {
+        val calendar = Calendar.getInstance()
+        try { SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(date)?.let { calendar.time = it } } catch (_: Exception) { }
+        DatePickerDialog(context, { _, year, month, day ->
+            date = String.format(Locale.KOREA, "%04d.%02d.%02d", year, month + 1, day)
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+    }
+    fun showTimePicker() {
+        val parts = time.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        TimePickerDialog(context, { _, h, m -> time = String.format(Locale.KOREA, "%02d:%02d", h, m) }, hour, minute, true).show()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("병원예약", "건강일기", "간단메모").forEach { tab ->
+                        Box(Modifier.weight(1f)) {
+                            if (entryKind == tab) {
+                                Button(onClick = { }, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)) {
+                                    Text(tab, fontSize = 11.sp, maxLines = 1, softWrap = false)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        entryKind = tab
+                                        onKindChange(tab)
+                                        reminderChoice = if (tab == "병원예약") {
+                                            existingAppointment?.let { saved -> appointmentReminderOptions.firstOrNull { it.second == saved.reminderOffsets }?.first } ?: "2시간 전"
+                                        } else {
+                                            existingDailyEntry?.takeIf { normalizeKind(it.kind) == tab }?.let { saved -> dailyReminderOptions.firstOrNull { it.second == saved.reminderMinutes }?.first } ?: "알림 없음"
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+                                ) { Text(tab, fontSize = 11.sp, maxLines = 1, softWrap = false) }
+                            }
+                        }
+                    }
+                }
+                Text(
+                    when (entryKind) {
+                        "병원예약" -> "병원 예약 날짜와 시간, 병원명 및 진료 내용을 입력합니다."
+                        "건강일기" -> "건강 일기는 제목과 오늘의 건강 내용을 입력합니다."
+                        else -> "간단 메모는 제목과 메모 내용을 입력합니다."
+                    },
+                    color = Color.Gray, fontSize = 11.sp
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("날짜") }, singleLine = true, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green) }
+                    OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("작성 시간") }, singleLine = true, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green) }
+                }
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(if (entryKind == "병원예약") "병원명" else "제목 (선택)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    label = { Text(when (entryKind) { "병원예약" -> "진료 내용 / 메모"; "건강일기" -> "오늘의 건강 일기"; else -> "메모 내용" }) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 7
+                )
+                if (entryKind == "건강일기") {
+                    Text("건강 일기는 알림 없이 기록됩니다.", color = Color.Gray, fontSize = 11.sp)
+                } else {
+                    Box {
+                        OutlinedButton(onClick = { reminderMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (entryKind == "병원예약") "예약 알림: $reminderChoice" else "메모 알림: $reminderChoice")
+                        }
+                        DropdownMenu(expanded = reminderMenu, onDismissRequest = { reminderMenu = false }) {
+                            val choices = if (entryKind == "병원예약") appointmentReminderOptions.map { it.first } else dailyReminderOptions.map { it.first }
+                            choices.forEach { choice ->
+                                DropdownMenuItem(text = { Text(choice) }, onClick = { reminderChoice = choice; reminderMenu = false })
+                            }
+                        }
+                    }
+                }
+                if (entryKind == "병원예약" && existingAppointment != null) {
+                    TextButton(onClick = { onDeleteAppointment(existingAppointment) }) { Text("일정 삭제", color = Color.Red) }
+                }
+                if (entryKind != "병원예약" && existingDailyEntry != null && normalizeKind(existingDailyEntry.kind) == entryKind) {
+                    TextButton(onClick = { onDeleteDailyEntry(existingDailyEntry) }) { Text("기록 삭제", color = Color.Red) }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
+                val parsed = try { fmt.parse("$date $time") } catch (_: Exception) { null }
+                if (parsed != null) {
+                    when (entryKind) {
+                        "병원예약" -> if (title.isNotBlank()) {
+                            onSaveAppointment(title.trim(), date.trim(), time.trim(), body.trim(), appointmentReminderOptions.firstOrNull { it.first == reminderChoice }?.second ?: emptyList())
+                        }
+                        else -> if (body.isNotBlank()) {
+                            val kind = if (entryKind == "건강일기") "건강 일기" else "간단 메모"
+                            val reminder = if (kind == "간단 메모") dailyReminderOptions.firstOrNull { it.first == reminderChoice }?.second else null
+                            onSaveDailyEntry(date.trim(), time.trim(), title.trim(), body.trim(), reminder)
+                        }
+                    }
+                }
+            }) { Text("저장") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+    )
 }
