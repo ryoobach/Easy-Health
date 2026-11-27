@@ -33,4 +33,4 @@
 | 2026-11-26 | 1.46 TEST | `feature/v1.41-health-schedule-diary` | 성공 | CI run 45910097653 성공. 단위 테스트, APK 생성, package/version 검증, 기존 테스트 서명키 지문 검증, artifact 업로드 완료. Artifact `Easy-Health-1.46-Test` (15158714829). Package `com.ryoo.easyhealth.test143`, versionCode 46. 실기기 설치·화면 동작은 별도 미검증. 상세: `2026-11-26-v1.46-test-build.md`. |
 
 
-| 2026-11-27 | 1.47 TEST | `build/v1.47-feedback-implementation` → `feature/v1.41-health-schedule-diary` | 준비 중 | 최신 `FEEDBACK.md` v1.46 항목과 2026-11-27 업로드된 `feedback.png`를 기준으로 리포트/일정·일기 화면을 대조. 일정 입력을 3개 탭 통합형으로 개선하고, 테스트 package `com.ryoo.easyhealth.test143` 및 기존 테스트 서명키 유지. versionName 1.47 / versionCode 47. 상세: `2026-11-27-v1.47-test-build.md`. |
+| 2026-11-27 | 1.47 TEST | `build/v1.47-feedback-implementation` → `feature/v1.41-health-schedule-diary` | 빌드 진행 중 | CI run 45932784839 시작(03:12:18Z). 최신 `feedback.png` 기준으로 리포트/일정·일기 화면을 대조하고 일정 입력을 3개 탭 통합형으로 개선. 테스트 package `com.ryoo.easyhealth.test143`, 기존 테스트 서명키 복원 성공. versionName 1.47 / versionCode 47. 상세: `2026-11-27-v1.47-test-build.md`. |
