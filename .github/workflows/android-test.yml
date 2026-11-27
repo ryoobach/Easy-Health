@@ -6,12 +6,14 @@ on:
       - "*.md"
       - "**/*.md"
       - "build-logs/**"
+      - ".github/workflows/**"
   pull_request:
     branches: [ "main" ]
     paths-ignore:
       - "*.md"
       - "**/*.md"
       - "build-logs/**"
+      - ".github/workflows/**"
   workflow_dispatch:
 permissions:
   contents: read
@@ -83,7 +85,7 @@ jobs:
         run: |
           mkdir -p "Easy-Health-1.49-Test"
           cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.49-Test/Easy-Health-1.49-Test.apk"
-          printf "Easy Health 1.48 테스트 앱 설치 안내\\n\\n기존 Easy Health 정식 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test143로 설치되므로 정식 앱과 함께 설치됩니다.\\n기존 테스트 앱이 설치되어 있다면 같은 패키지와 기존 테스트 서명으로 업데이트됩니다.\\n테스트 앱의 데이터는 정식 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.49-Test/설치안내.txt"
+          printf "Easy Health 1.49 테스트 앱 설치 안내\\n\\n기존 Easy Health 정식 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test143로 설치되므로 정식 앱과 함께 설치됩니다.\\n기존 테스트 앱이 설치되어 있다면 같은 패키지와 기존 테스트 서명으로 업데이트됩니다.\\n테스트 앱의 데이터는 정식 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.49-Test/설치안내.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: Easy-Health-1.49-Test
