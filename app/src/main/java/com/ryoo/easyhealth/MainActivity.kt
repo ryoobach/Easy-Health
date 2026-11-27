@@ -1398,33 +1398,35 @@ fun EasyHealthApp(context: Context) {
                                         Text("전체 평균 ${String.format(Locale.KOREA, "%.1f", overallAverage)} mg/dL", color = riskFor(vital, overallAverage.toString(), selectedProfile).color, fontWeight = FontWeight.Bold, fontSize = 23.sp)
                                         Text("기간별 평균 · 같은 시간대의 연속 측정은 한 번으로 묶어 계산", color = Ink, fontSize = 11.sp)
                                         val glucoseChunkRanges = mutableListOf<Pair<Long, Long>>()
+                                        val latestGlucoseDate = latestGlucoseTimestamp
                                         if (vitalPeriod == "1개월") {
                                             for (index in 0 until 4) {
-                                                val end = now - index * 7L * 86400000L
+                                                val end = latestGlucoseDate - index * 7L * 86400000L
                                                 glucoseChunkRanges.add((end - 7L * 86400000L) to end)
                                             }
                                         } else if (vitalPeriod == "3개월") {
-                                            val endCalendar = Calendar.getInstance().apply { timeInMillis = now }
                                             for (index in 0 until 3) {
-                                                val end = endCalendar.timeInMillis
-                                                val startCalendar = (endCalendar.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
-                                                glucoseChunkRanges.add(startCalendar.timeInMillis to end)
-                                                endCalendar.add(Calendar.MONTH, -1)
+                                                val end = Calendar.getInstance().apply {
+                                                    timeInMillis = latestGlucoseDate
+                                                    add(Calendar.MONTH, -index)
+                                                }.timeInMillis
+                                                val start = Calendar.getInstance().apply {
+                                                    timeInMillis = end
+                                                    add(Calendar.MONTH, -1)
+                                                }.timeInMillis
+                                                glucoseChunkRanges.add(start to end)
                                             }
                                         } else if (vitalPeriod == "전체") {
-                                            val firstTimestamp = vitalRows.minOf { it.timestamp }
-                                            val endCalendar = Calendar.getInstance().apply { timeInMillis = now }
-                                            while (true) {
-                                                val end = endCalendar.timeInMillis
-                                                val startCalendar = (endCalendar.clone() as Calendar).apply { add(Calendar.MONTH, -3) }
-                                                val start = startCalendar.timeInMillis
+                                            var end = latestGlucoseDate
+                                            val firstTimestamp = reportGlucoseRecords.minOfOrNull { it.timestamp } ?: latestGlucoseDate
+                                            while (end >= firstTimestamp) {
+                                                val start = end - 90L * 86400000L
                                                 glucoseChunkRanges.add(start to end)
-                                                if (start <= firstTimestamp) break
-                                                endCalendar.add(Calendar.MONTH, -3)
+                                                end = start
                                             }
                                         }
                                         if (glucoseChunkRanges.isNotEmpty()) {
-                                            glucoseChunkRanges.asReversed().forEach { (rangeStart, rangeEnd) ->
+                                            glucoseChunkRanges.forEach { (rangeStart, rangeEnd) ->
                                                 val chunkGroups = glucoseMeasurementGroups(vitalRows.filter { it.timestamp >= rangeStart && it.timestamp < rangeEnd })
                                                 val chunkValues = chunkGroups.map { it.average }
                                                 val startLabel = SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(rangeStart))
