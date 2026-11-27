@@ -2610,12 +2610,14 @@ private fun ScheduleEntryDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     OutlinedTextField(value = date, onValueChange = { date = it }, label = null, singleLine = true,
-                        modifier = Modifier.weight(1.35f), placeholder = { Text("년.월.일", fontSize = 12.sp) })
+                        modifier = Modifier.weight(1.35f).height(42.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        placeholder = { Text("년.월.일", fontSize = 12.sp) })
                     IconButton(onClick = { showDatePicker() }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green, modifier = Modifier.size(20.dp))
                     }
-                    OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("시간") }, singleLine = true,
-                        modifier = Modifier.weight(0.72f), placeholder = { Text("시:분", fontSize = 12.sp) })
+                    OutlinedTextField(value = time, onValueChange = { time = it }, label = null, singleLine = true,
+                        modifier = Modifier.weight(0.90f).height(42.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        placeholder = { Text("시:분", fontSize = 12.sp) })
                     IconButton(onClick = { showTimePicker() }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green, modifier = Modifier.size(20.dp))
                     }
@@ -2623,9 +2625,11 @@ private fun ScheduleEntryDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text(if (entryKind == "병원예약") "병원명" else "제목 (선택)") },
+                    label = null,
+                    placeholder = { Text(if (entryKind == "병원예약") "병원명" else "제목 (선택)", fontSize = 12.sp) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
                 )
                 OutlinedTextField(
                     value = body,
