@@ -1448,8 +1448,8 @@ fun EasyHealthApp(context: Context) {
                                     if (vital == "혈당") {
                                         HorizontalDivider(color = Color(0xFFD5E8D9), modifier = Modifier.padding(vertical = 5.dp))
                                         Text("당화혈색소 추정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                        if (a1cReportPoints.isEmpty()) Text("혈당 측정 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
-                                        a1cReportPoints.forEach { (periodLabel, estimate) ->
+                                        if (reportA1cPoints.isEmpty()) Text("혈당 측정 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                                        reportA1cPoints.forEach { (periodLabel, estimate) ->
                                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 Text(periodLabel, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
