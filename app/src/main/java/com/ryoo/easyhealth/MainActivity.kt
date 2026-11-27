@@ -1123,6 +1123,10 @@ fun EasyHealthApp(context: Context) {
                             selectedAppointmentDate = it
                             showDateEntryActions = true
                             appointmentInitialDate = it
+                            editingAppointment = null
+                            editingDailyEntry = null
+                            if (selectedEntryTab == "건강일기") dailyEntryKind = "건강 일기"
+                            if (selectedEntryTab == "간단메모") dailyEntryKind = "간단 메모"
                             showAppointmentDialog = false
                             showDailyEntryDialog = true
                         },
@@ -1130,6 +1134,10 @@ fun EasyHealthApp(context: Context) {
                             selectedAppointmentDate = it
                             showDateEntryActions = true
                             appointmentInitialDate = it
+                            editingAppointment = null
+                            editingDailyEntry = null
+                            if (selectedEntryTab == "건강일기") dailyEntryKind = "건강 일기"
+                            if (selectedEntryTab == "간단메모") dailyEntryKind = "간단 메모"
                             showAppointmentDialog = false
                             showDailyEntryDialog = true
                         }
@@ -1757,6 +1765,8 @@ fun EasyHealthApp(context: Context) {
                 showAppointmentDialog = false
                 showDailyEntryDialog = false
                 appointmentInitialDate = null
+                editingAppointment = null
+                editingDailyEntry = null
             },
             onKindChange = { kind ->
                 selectedEntryTab = kind
