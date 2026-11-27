@@ -39,4 +39,7 @@
 | 2026-11-27 | 1.49 TEST | `feature/v1.41-health-schedule-diary` | CI 성공·APK 아티팩트 확인 | run 45966169260 성공. 단위 테스트, APK 빌드, package/version (`com.ryoo.easyhealth.test143`, 1.49/49), 기존 테스트 서명 지문 검증, 아티팩트 업로드 및 다운로드 확인 완료. Artifact `Easy-Health-1.49-Test` (15183736009, 17,661,050 bytes). 설치 안내문 버전 표기 오타는 배포용 ZIP에서 1.49로 정정. 실기기 설치·화면 동작·데이터 보존은 사용자 확인 대기. 상세: [2026-11-27-v1.49-test-build.md](2026-11-27-v1.49-test-build.md). |
 
 
-| 2026-11-27 | 1.50 TEST | `feature/v1.41-health-schedule-diary` | 빌드 대기 | FB-003: 날짜/시간 입력 레이아웃, 작성시간 개념 제거(사건·기록 날짜 단일 기준), 날짜 정규화로 알림·달력·리스트 누락 방지, 기록 카드 높이 축소. versionName 1.50 / versionCode 50 / 테스트 package com.ryoo.easyhealth.test143. |
+| 2026-11-27 | 1.50 TEST | `feature/v1.41-health-schedule-diary` | CI 성공 | FB-003 반영. CI run 45977770006 성공: 단위 테스트, APK 빌드, package/version 및 기존 테스트 서명 검증, 아티팩트 업로드 완료. versionName 1.50 / versionCode 50 / package `com.ryoo.easyhealth.test143`. 실기기 설치 검증은 사용자 확인 대기. 상세: `2026-11-27-v1.50-test-build.md`. |
+
+
+| 2026-11-27 | 1.51 TEST | `feature/v1.41-health-schedule-diary` | 빌드 시작 대기 | 1.50 성공 이후 다음 버전. versionName 1.51 / versionCode 51 / package `com.ryoo.easyhealth.test143`. 기존 UI·기능 소스를 유지한 버전업 TEST 빌드이며, HbA1c 계산 엔진의 신규 기능 구현은 이번 버전에 포함되지 않음. 상세: `2026-11-27-v1.51-test-build.md`. |
