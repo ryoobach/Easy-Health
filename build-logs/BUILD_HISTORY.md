@@ -34,4 +34,6 @@
 
 
 | 2026-11-27 | 1.47 TEST | `build/v1.47-feedback-implementation` → `feature/v1.41-health-schedule-diary` | CI 성공 | CI run 45932784839 성공. 단위 테스트·APK 생성·package/version 검증·기존 테스트 서명 검증·artifact 업로드 모두 통과. Artifact `Easy-Health-1.47-Test` (15169187095, 17,659,596 bytes). Package `com.ryoo.easyhealth.test143`, versionName 1.47 / versionCode 47. 실기기 설치·화면 동작·데이터 보존은 사용자 확인 대기. 상세: `2026-11-27-v1.47-test-build.md`. |
-| 2026-11-27 | 1.48 TEST | `feature/v1.41-health-schedule-diary` | CI 실행 중 (run 45953948703) | versionName 1.48 / versionCode 48. 테스트 package `com.ryoo.easyhealth.test143` 및 기존 테스트 서명키 유지. 달력 짧은 클릭은 해당 날짜 기록 조회, 길게 클릭은 입력창 표시; 통합 입력창 크기 축소 및 초기 기록 종류 동기화; 리포트 당화혈색소를 혈당 그래프 아래 요약에 배치하고 1주/1개월/3개월/전체 구간을 피드백대로 계산. CI 결과는 실행 후 갱신. |
+| 2026-11-27 | 1.48 TEST | `feature/v1.41-health-schedule-diary` | 빌드·테스트 성공, APK 업로드 누락 | CI run 45953948703: 단위 테스트, APK 빌드, 패키지/버전 및 테스트 서명 검증 성공. 단, 업로드 단계가 `Easy-Health-1.47-Test/*`를 찾도록 잘못 설정되어 실제 생성 폴더 `Easy-Health-1.48-Test/`와 불일치, “No files were found” 경고로 다운로드 아티팩트 미생성. 상세: [2026-11-27-v1.48-test-build.md](2026-11-27-v1.48-test-build.md). |
+
+| 2026-11-27 | 1.49 TEST | `feature/v1.41-health-schedule-diary` | 빌드 시작 예정 | versionName 1.49 / versionCode 49. 테스트 package `com.ryoo.easyhealth.test143`와 기존 테스트 서명 캐시를 유지. 이전 1.48의 코드 수정은 보존하고, 아티팩트 업로드 경로/이름을 1.49로 일치시킨다. Android Actions 실행 결과 기록 대기. |
