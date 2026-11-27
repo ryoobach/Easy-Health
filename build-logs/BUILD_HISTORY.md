@@ -48,4 +48,4 @@
 
 
 | 2026-11-27 | 1.54 TEST | `feature/v1.41-health-schedule-diary` | 성공 | CI run 45998604337 성공. 단위 테스트, APK 빌드, package/version 및 격리 테스트 서명 검증, artifact 업로드 완료. Artifact `Easy-Health-1.54-Test` (15197566422, 17,662,104 bytes). Package `com.ryoo.easyhealth.test143`, versionCode 54. 실기기 설치 여부는 별도 확인. |
-| 2026-11-27 | 1.55 TEST | `feature/v1.41-health-schedule-diary` | 빌드 준비 | 1.54 성공 이후 다음 번호. 90일×8개 시간대(720개) 실제·추정값 생성, 실제값 우선, 1·2·3주 동일 시간대 실측 평균 보완, 취침 전 보완, 1.48 시간 가중 평균/환산식 유지, 기록·리포트 공통 엔진 적용. |
+| 2026-11-27 | 1.55 TEST | `feature/v1.41-health-schedule-diary` | **성공** | CI run 46005185116 성공. 단위 테스트, APK 빌드, package/version(1.55/55), 테스트 서명키 지문, artifact 업로드 모두 통과. Artifact `Easy-Health-1.55-Test` (15200952150, 17,671,661 bytes). Package `com.ryoo.easyhealth.test143`. 실기기 설치·화면 동작은 미검증. 상세: [2026-11-27-v1.55-test-build.md](2026-11-27-v1.55-test-build.md). |
