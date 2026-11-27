@@ -1195,6 +1195,7 @@ fun EasyHealthApp(context: Context) {
                                     modifier = Modifier.fillMaxWidth().combinedClickable(
                                         onClick = {
                                             editingAppointment = a
+                                            editingDailyEntry = null
                                             selectedEntryTab = "병원예약"
                                             appointmentInitialDate = a.date
                                             showDailyEntryDialog = false
@@ -1227,6 +1228,7 @@ fun EasyHealthApp(context: Context) {
                                     modifier = Modifier.fillMaxWidth().combinedClickable(
                                         onClick = {
                                             editingDailyEntry = entry
+                                            editingAppointment = null
                                             dailyEntryKind = entry.kind
                                             selectedEntryTab = if (entry.kind == "건강 일기") "건강일기" else "간단메모"
                                             showAppointmentDialog = false
@@ -1817,11 +1819,13 @@ fun EasyHealthApp(context: Context) {
             },
             onDeleteAppointment = { appointment ->
                 appointmentDeleteTarget = appointment
+                editingAppointment = null
                 showAppointmentDialog = false
                 showDailyEntryDialog = false
             },
             onDeleteDailyEntry = { entry ->
                 dailyEntryDeleteTarget = entry
+                editingDailyEntry = null
                 showAppointmentDialog = false
                 showDailyEntryDialog = false
             }
