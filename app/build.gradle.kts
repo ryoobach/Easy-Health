@@ -13,9 +13,9 @@ android {
         applicationId = if (testApp) "com.ryoo.easyhealth.test143" else "com.ryoo.easyhealth"
         minSdk = 26
         targetSdk = 35
-        versionCode = 53
-        versionName = "1.53"
-        manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.53 TEST" else "Easy Health"
+        versionCode = 54
+        versionName = "1.54"
+        manifestPlaceholders["appLabel"] = if (testApp) "Easy Health 1.54 TEST" else "Easy Health"
         buildConfigField("String", "BUILD_DATE", "\"\u0024{LocalDate.now()}\"")
     }
     // Always sign every debug APK with its designated key. The release workflow
