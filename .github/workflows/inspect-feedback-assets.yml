@@ -9,12 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: feedback-source
       - name: Package feedback reference images
         run: |
-          test -s feedback.jpg
-          test -s feedback.png
+          test -s feedback-source/feedback.jpg
+          test -s feedback-source/feedback.png
           mkdir -p reference-images
-          cp feedback.jpg feedback.png reference-images/
+          cp feedback-source/feedback.jpg feedback-source/feedback.png reference-images/
       - uses: actions/upload-artifact@v4
         with:
           name: Easy-Health-feedback-reference-images
