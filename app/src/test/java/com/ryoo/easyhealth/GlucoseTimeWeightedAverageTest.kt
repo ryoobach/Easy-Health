@@ -140,3 +140,74 @@ class GlucoseTimeWeightedAverageTest {
         assertNull(estimate(listOf(lab)))
     }
 }
+
+
+class SlotBasedGlucoseEstimateTest {
+    private val dayMillis = 86_400_000L
+
+    private fun timestamp(dayStart: Long, hour: Int, minute: Int = 0): Long =
+        dayStart + (hour * 60L + minute) * 60_000L
+
+    private fun scheduleSlots(dayStart: Long): List<Long> = listOf(
+        timestamp(dayStart, 7), timestamp(dayStart, 7, 45), timestamp(dayStart, 10),
+        timestamp(dayStart, 11, 45), timestamp(dayStart, 14),
+        timestamp(dayStart, 17, 45), timestamp(dayStart, 20), timestamp(dayStart, 22)
+    )
+
+    private fun endOfDay(start: Long): Long = start + dayMillis - 1
+
+    private fun makeRecords(start: Long, omitted: Pair<Int, Int>? = null): List<VitalRecord> {
+        val records = mutableListOf<VitalRecord>()
+        for (day in 0 until 90) {
+            val dayStart = start + day * dayMillis
+            scheduleSlots(dayStart).forEachIndexed { slot, at ->
+                if (omitted != day to slot) {
+                    records.add(VitalRecord("r-$day-$slot", "본인", "혈당",
+                        (100 + slot * 10).toString(), at, "Meter"))
+                }
+            }
+        }
+        return records
+    }
+
+    @Test fun createsExactly720TimestampedSlotsAndUsesSameSlotHistory() {
+        val endDay = 1_750_000_000_000L
+        val calendar = java.util.Calendar.getInstance().apply {
+            timeInMillis = endDay
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+            add(java.util.Calendar.DAY_OF_YEAR, -89)
+        }
+        val start = calendar.timeInMillis
+        val records = makeRecords(start, 45 to 4)
+        val result = calculateSlotBasedGlucoseEstimate(records, endOfDay(start + 89 * dayMillis))
+        org.junit.Assert.assertNotNull(result)
+        org.junit.Assert.assertEquals(720, result!!.slots.size)
+        org.junit.Assert.assertEquals(719, result.actualSlotCount)
+        org.junit.Assert.assertEquals(1, result.estimatedSlotCount)
+        org.junit.Assert.assertEquals(140.0, result.slots[45 * 8 + 4].valueMgDl, 0.001)
+        org.junit.Assert.assertTrue(result.slots.all { it.timestamp > 0L })
+    }
+
+    @Test fun actualReadingTakesPrecedenceOverHistoricalSlotAverage() {
+        val endDay = 1_750_000_000_000L
+        val calendar = java.util.Calendar.getInstance().apply {
+            timeInMillis = endDay
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            add(java.util.Calendar.DAY_OF_YEAR, -89)
+        }
+        val start = calendar.timeInMillis
+        val records = makeRecords(start).toMutableList()
+        val at = scheduleSlots(start + 60 * dayMillis)[4]
+        records.removeAll { it.id == "r-60-4" }
+        records.add(VitalRecord("override", "본인", "혈당", "222", at, "Meter"))
+        val result = calculateSlotBasedGlucoseEstimate(records, endOfDay(start + 89 * dayMillis))
+        org.junit.Assert.assertNotNull(result)
+        val selected = result!!.slots[60 * 8 + 4]
+        org.junit.Assert.assertFalse(selected.estimated)
+        org.junit.Assert.assertEquals(222.0, selected.valueMgDl, 0.001)
+    }
+}

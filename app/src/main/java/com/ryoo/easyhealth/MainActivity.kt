@@ -826,50 +826,46 @@ fun EasyHealthApp(context: Context) {
     if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
     val reportGlucoseRecords = personRecords.filter { it.type == "혈당" && it.timestamp <= now }
-    // 모든 HbA1c 계산은 기록 탭의 1.50 시간 가중 계산 엔진을 공유합니다.
-    // 1주일 탭은 기록 탭에 표시되는 동일한 계산 결과를 그대로 사용합니다.
-    val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
     val latestGlucoseTimestamp = reportGlucoseRecords.maxOfOrNull { it.timestamp } ?: now
+    // 기준일은 마지막 실제 혈당 측정일의 끝으로 고정해 기록/리포트가 같은 90일 창을 사용합니다.
+    val a1cReferenceEnd = Calendar.getInstance().apply {
+        timeInMillis = latestGlucoseTimestamp
+        set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
+    val a1cSchedule = GlucoseDailySchedule(
+        wakeTime = selectedProfile.wakeTime,
+        breakfastTime = selectedProfile.breakfastTime,
+        lunchTime = selectedProfile.lunchTime,
+        dinnerTime = selectedProfile.dinnerTime,
+        bedtime = selectedProfile.bedtime
+    )
+    // 기록 탭과 리포트 탭은 동일한 90일 × 하루 8개 시간대 엔진을 공유합니다.
+    val slotBasedA1c = calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, a1cReferenceEnd, a1cSchedule)
+    val timeWeightedA1cEstimate = slotBasedA1c?.estimate
     val reportA1cPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
         "1개월" -> (0..3).map { weekOffset ->
-            val periodEnd = latestGlucoseTimestamp - weekOffset * 7L * 24L * 60L * 60L * 1000L
-            val periodStart = periodEnd - 90L * 24L * 60L * 60L * 1000L
+            val periodEnd = a1cReferenceEnd - weekOffset * 7L * 24L * 60L * 60L * 1000L
             val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
-            label to calculateTimeWeightedGlucoseEstimate(
-                records = reportGlucoseRecords, nowMillis = periodEnd,
-                windowStartMillis = periodStart, windowEndMillis = periodEnd,
-                minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
-            )
+            label to calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, periodEnd, a1cSchedule)?.estimate
         }
         "3개월" -> (0..2).map { monthOffset ->
             val periodEnd = Calendar.getInstance().apply {
-                timeInMillis = latestGlucoseTimestamp
+                timeInMillis = a1cReferenceEnd
                 add(Calendar.MONTH, -monthOffset)
-            }.timeInMillis
-            val periodStart = Calendar.getInstance().apply {
-                timeInMillis = periodEnd
-                add(Calendar.DAY_OF_YEAR, -90)
+                if (monthOffset > 0) add(Calendar.DAY_OF_YEAR, -1)
             }.timeInMillis
             val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
-            label to calculateTimeWeightedGlucoseEstimate(
-                records = reportGlucoseRecords, nowMillis = periodEnd,
-                windowStartMillis = periodStart, windowEndMillis = periodEnd,
-                minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
-            )
+            label to calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, periodEnd, a1cSchedule)?.estimate
         }
         "전체" -> {
             val points = mutableListOf<Pair<String, TimeWeightedGlucoseEstimate?>>()
-            var periodEnd = latestGlucoseTimestamp
+            var periodEnd = a1cReferenceEnd
             val earliest = reportGlucoseRecords.minOfOrNull { it.timestamp } ?: latestGlucoseTimestamp
             while (periodEnd >= earliest) {
-                val periodStart = periodEnd - 90L * 24L * 60L * 60L * 1000L
                 val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
-                points.add(label to calculateTimeWeightedGlucoseEstimate(
-                    records = reportGlucoseRecords, nowMillis = periodEnd,
-                    windowStartMillis = periodStart, windowEndMillis = periodEnd,
-                    minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
-                ))
-                periodEnd = periodStart
+                points.add(label to calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, periodEnd, a1cSchedule)?.estimate)
+                periodEnd -= 90L * 24L * 60L * 60L * 1000L
             }
             points
         }
@@ -973,7 +969,7 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             Text(
                                                 timeWeightedA1cEstimate?.let {
-                                                    "측정 ${it.measurementCount}회 · 반영 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간 · 기간 ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.firstTimestamp))}~${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(it.lastTimestamp))}"
+                                                    "총 ${it.measurementCount}회 · 실측 ${slotBasedA1c?.actualSlotCount ?: 0}회 · 추정 ${slotBasedA1c?.estimatedSlotCount ?: 0}회"
                                                 } ?: "기록량 부족 또는 긴 공백으로 추정 불가",
                                                 color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp
                                             )
@@ -1450,15 +1446,17 @@ fun EasyHealthApp(context: Context) {
                                         Text("당화혈색소 추정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                         if (reportA1cPoints.isEmpty()) Text("혈당 측정 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
                                         reportA1cPoints.forEach { (periodLabel, estimate) ->
-                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                Text(periodLabel, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text(estimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
-                                                        color = estimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
-                                                        fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                                    Text(estimate?.let { "평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 당화혈색소 ${it.measurementCount}회" } ?: "유효 측정 데이터 부족",
-                                                        color = Color.Gray, fontSize = 10.sp)
-                                                }
+                                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text(periodLabel, color = Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.weight(0.85f))
+                                                Text(estimate?.let { "평균 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)}" } ?: "평균 --",
+                                                    color = Color.Gray, fontSize = 10.sp, modifier = Modifier.weight(0.9f))
+                                                Text(estimate?.let { "${it.measurementCount}회" } ?: "--회",
+                                                    color = Color.Gray, fontSize = 10.sp, modifier = Modifier.weight(0.45f))
+                                                Text(estimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "--",
+                                                    color = estimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
+                                                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                         Text("기록 탭과 같은 시간 가중 계산 · 실제 검사실 수치가 아닌 참고용 추정치", color = Color.Gray, fontSize = 10.sp)

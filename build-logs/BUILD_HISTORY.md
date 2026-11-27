@@ -45,3 +45,7 @@
 | 2026-11-27 | 1.51 TEST | `feature/v1.41-health-schedule-diary` | 빌드 시작 대기 | 1.50 성공 이후 다음 버전. versionName 1.51 / versionCode 51 / package `com.ryoo.easyhealth.test143`. 기존 UI·기능 소스를 유지한 버전업 TEST 빌드이며, HbA1c 계산 엔진의 신규 기능 구현은 이번 버전에 포함되지 않음. 상세: `2026-11-27-v1.51-test-build.md`. |
 
 | 2026-11-27 | 1.52 TEST | `feature/v1.41-health-schedule-diary` | 빌드 진행 | 1.50 기록 탭 시간 가중 HbA1c 계산 엔진을 리포트 탭의 공통 계산 기준으로 사용. 기준일은 마지막 혈당 입력일. 1개월은 7일 간격 4회, 3개월은 월 간격 3회, 전체는 90일 간격 N회로 최신순 표시. 각 기준일 이전 90일 혈당 데이터로 계산. 평균혈당·실측횟수·HbA1c를 기간별 표시. versionName 1.52 / versionCode 52. |
+
+
+| 2026-11-27 | 1.54 TEST | `feature/v1.41-health-schedule-diary` | 성공 | CI run 45998604337 성공. 단위 테스트, APK 빌드, package/version 및 격리 테스트 서명 검증, artifact 업로드 완료. Artifact `Easy-Health-1.54-Test` (15197566422, 17,662,104 bytes). Package `com.ryoo.easyhealth.test143`, versionCode 54. 실기기 설치 여부는 별도 확인. |
+| 2026-11-27 | 1.55 TEST | `feature/v1.41-health-schedule-diary` | 빌드 준비 | 1.54 성공 이후 다음 번호. 90일×8개 시간대(720개) 실제·추정값 생성, 실제값 우선, 1·2·3주 동일 시간대 실측 평균 보완, 취침 전 보완, 1.48 시간 가중 평균/환산식 유지, 기록·리포트 공통 엔진 적용. |
