@@ -37,3 +37,6 @@
 | 2026-11-27 | 1.48 TEST | `feature/v1.41-health-schedule-diary` | 빌드·테스트 성공, APK 업로드 누락 | CI run 45953948703: 단위 테스트, APK 빌드, 패키지/버전 및 테스트 서명 검증 성공. 단, 업로드 단계가 `Easy-Health-1.47-Test/*`를 찾도록 잘못 설정되어 실제 생성 폴더 `Easy-Health-1.48-Test/`와 불일치, “No files were found” 경고로 다운로드 아티팩트 미생성. 상세: [2026-11-27-v1.48-test-build.md](2026-11-27-v1.48-test-build.md). |
 
 | 2026-11-27 | 1.49 TEST | `feature/v1.41-health-schedule-diary` | CI 성공·APK 아티팩트 확인 | run 45966169260 성공. 단위 테스트, APK 빌드, package/version (`com.ryoo.easyhealth.test143`, 1.49/49), 기존 테스트 서명 지문 검증, 아티팩트 업로드 및 다운로드 확인 완료. Artifact `Easy-Health-1.49-Test` (15183736009, 17,661,050 bytes). 설치 안내문 버전 표기 오타는 배포용 ZIP에서 1.49로 정정. 실기기 설치·화면 동작·데이터 보존은 사용자 확인 대기. 상세: [2026-11-27-v1.49-test-build.md](2026-11-27-v1.49-test-build.md). |
+
+
+| 2026-11-27 | 1.50 TEST | `feature/v1.41-health-schedule-diary` | 빌드 대기 | FB-003: 날짜/시간 입력 레이아웃, 작성시간 개념 제거(사건·기록 날짜 단일 기준), 날짜 정규화로 알림·달력·리스트 누락 방지, 기록 카드 높이 축소. versionName 1.50 / versionCode 50 / 테스트 package com.ryoo.easyhealth.test143. |
