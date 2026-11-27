@@ -1,0 +1,22 @@
+name: Inspect feedback reference images
+on:
+  push:
+    branches: [ "build/v1.47-feedback-implementation" ]
+permissions:
+  contents: read
+jobs:
+  package-reference-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package feedback reference images
+        run: |
+          test -s feedback.jpg
+          test -s feedback.png
+          mkdir -p reference-images
+          cp feedback.jpg feedback.png reference-images/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Easy-Health-feedback-reference-images
+          path: reference-images/
+          if-no-files-found: error
