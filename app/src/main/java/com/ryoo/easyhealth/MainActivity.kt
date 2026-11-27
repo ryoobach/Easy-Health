@@ -825,73 +825,58 @@ fun EasyHealthApp(context: Context) {
     val availableReportTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
     if (availableReportTypes.isNotEmpty() && selectedReportVital !in availableReportTypes) selectedReportVital = availableReportTypes.first()
     val now = System.currentTimeMillis()
-    val reportStart = Calendar.getInstance().apply {
-        timeInMillis = now
-        when (reportPeriod) {
-            "1주일" -> add(Calendar.DAY_OF_YEAR, -7)
-            "1개월" -> add(Calendar.MONTH, -1)
-            "3개월" -> add(Calendar.MONTH, -3)
-        }
-    }.timeInMillis
-    val periodRecords = if (reportPeriod == "전체") reportRecords else reportRecords.filter { it.timestamp in reportStart..now }
-    // 초기 화면은 최근 90일 기준을 유지하고, 리포트는 선택한 기간만 별도로 계산합니다.
-    val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
     val reportGlucoseRecords = personRecords.filter { it.type == "혈당" && it.timestamp <= now }
-    // HbA1c represents a weighted estimate of the preceding ~3 months and must not
-    // change when the user switches the report's display period (1 week/1 month/etc.).
-    val reportA1cWindowStart = Calendar.getInstance().apply {
-        timeInMillis = now
-        add(Calendar.MONTH, -3)
-    }.timeInMillis
-    val reportA1cEstimate = calculateTimeWeightedGlucoseEstimate(
-        records = reportGlucoseRecords,
-        nowMillis = now,
-        windowStartMillis = reportA1cWindowStart,
-        windowEndMillis = now,
-        minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
-    )
-    val a1cReportPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
-        "1개월" -> (3 downTo 0).map { weekOffset ->
-            val periodEnd = now - weekOffset * 7L * 24L * 60L * 60L * 1000L
-            val periodStart = periodEnd - 7L * 24L * 60L * 60L * 1000L
-            val label = "${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodStart))} ~ ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodEnd))}"
+    // 모든 HbA1c 계산은 기록 탭의 1.50 시간 가중 계산 엔진을 공유합니다.
+    // 1주일 탭은 기록 탭에 표시되는 동일한 계산 결과를 그대로 사용합니다.
+    val timeWeightedA1cEstimate = calculateTimeWeightedGlucoseEstimate(personRecords, now)
+    val latestGlucoseTimestamp = reportGlucoseRecords.maxOfOrNull { it.timestamp } ?: now
+    val reportA1cPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
+        "1개월" -> (0..3).map { weekOffset ->
+            val periodEnd = latestGlucoseTimestamp - weekOffset * 7L * 24L * 60L * 60L * 1000L
+            val periodStart = periodEnd - 90L * 24L * 60L * 60L * 1000L
+            val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
             label to calculateTimeWeightedGlucoseEstimate(
-                records = reportGlucoseRecords, nowMillis = now,
+                records = reportGlucoseRecords, nowMillis = periodEnd,
                 windowStartMillis = periodStart, windowEndMillis = periodEnd,
                 minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
             )
         }
-        "3개월" -> (2 downTo 0).map { monthOffset ->
-            val periodEnd = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.MONTH, -monthOffset) }.timeInMillis
-            val periodStart = Calendar.getInstance().apply { timeInMillis = periodEnd; add(Calendar.MONTH, -1) }.timeInMillis
-            val label = "${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodStart))} ~ ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodEnd))}"
+        "3개월" -> (0..2).map { monthOffset ->
+            val periodEnd = Calendar.getInstance().apply {
+                timeInMillis = latestGlucoseTimestamp
+                add(Calendar.MONTH, -monthOffset)
+            }.timeInMillis
+            val periodStart = Calendar.getInstance().apply {
+                timeInMillis = periodEnd
+                add(Calendar.DAY_OF_YEAR, -90)
+            }.timeInMillis
+            val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
             label to calculateTimeWeightedGlucoseEstimate(
-                records = reportGlucoseRecords, nowMillis = now,
+                records = reportGlucoseRecords, nowMillis = periodEnd,
                 windowStartMillis = periodStart, windowEndMillis = periodEnd,
                 minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
             )
         }
         "전체" -> {
-            reportGlucoseRecords.minOfOrNull { it.timestamp }?.let { firstReading ->
-                val points = mutableListOf<Pair<String, TimeWeightedGlucoseEstimate?>>()
-                var windowStart: Long = firstReading
-                while (windowStart < now) {
-                    val windowEnd: Long = minOf(
-                        Calendar.getInstance().apply { timeInMillis = windowStart; add(Calendar.MONTH, 3) }.timeInMillis, now
-                    )
-                    val label = "${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowStart))} ~ ${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowEnd))}"
-                    points.add(label to calculateTimeWeightedGlucoseEstimate(
-                        records = reportGlucoseRecords, nowMillis = now,
-                        windowStartMillis = windowStart, windowEndMillis = windowEnd,
-                        minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
-                    ))
-                    if (windowEnd <= windowStart) break
-                    windowStart = windowEnd
-                }
-                points
-            } ?: emptyList()
+            val points = mutableListOf<Pair<String, TimeWeightedGlucoseEstimate?>>()
+            var periodEnd = latestGlucoseTimestamp
+            val earliest = reportGlucoseRecords.minOfOrNull { it.timestamp } ?: latestGlucoseTimestamp
+            while (periodEnd >= earliest) {
+                val periodStart = periodEnd - 90L * 24L * 60L * 60L * 1000L
+                val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
+                points.add(label to calculateTimeWeightedGlucoseEstimate(
+                    records = reportGlucoseRecords, nowMillis = periodEnd,
+                    windowStartMillis = periodStart, windowEndMillis = periodEnd,
+                    minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
+                ))
+                periodEnd = periodStart
+            }
+            points
         }
-        else -> listOf("기록 탭과 동일한 최근 3개월 추정" to reportA1cEstimate)
+        else -> listOf(
+            "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(latestGlucoseTimestamp)) to
+                timeWeightedA1cEstimate
+        )
     }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
