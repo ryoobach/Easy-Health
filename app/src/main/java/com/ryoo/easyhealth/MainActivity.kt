@@ -251,9 +251,22 @@ data class HospitalAppointment(val id: Int, val hospital: String, val date: Stri
 
 data class DailyEntry(val id: Int, val kind: String, val date: String, val time: String, val title: String, val body: String, val reminderMinutes: Int? = null)
 
+// 일정·일기는 작성 시각이 아니라 사용자가 지정한 사건/기록 날짜를 기준으로 조회합니다.
+private fun normalizeScheduleDate(value: String): String {
+    val raw = value.trim()
+    for (pattern in listOf("yyyy.MM.dd", "yyyy-MM-dd", "yyyy/MM/dd")) {
+        try {
+            val parser = SimpleDateFormat(pattern, Locale.KOREA).apply { isLenient = false }
+            val parsed = parser.parse(raw) ?: continue
+            return SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(parsed)
+        } catch (_: Exception) { }
+    }
+    return raw
+}
+
 private fun saveAppointments(context: Context, appointments: List<HospitalAppointment>) {
     val array = JSONArray()
-    appointments.forEach { a -> array.put(JSONObject().put("id", a.id).put("hospital", a.hospital).put("date", a.date).put("time", a.time).put("memo", a.memo).put("status", a.status).put("reminderOffsets", JSONArray(a.reminderOffsets))) }
+    appointments.forEach { a -> array.put(JSONObject().put("id", a.id).put("hospital", a.hospital).put("date", normalizeScheduleDate(a.date)).put("time", a.time).put("memo", a.memo).put("status", a.status).put("reminderOffsets", JSONArray(a.reminderOffsets))) }
     context.getSharedPreferences("easy_health", Context.MODE_PRIVATE).edit().putString("appointments", array.toString()).apply()
 }
 private fun appointmentAlarmRequestCode(id: Int, index: Int): Int =
@@ -261,7 +274,7 @@ private fun appointmentAlarmRequestCode(id: Int, index: Int): Int =
 
 private fun scheduleAppointmentReminder(context: Context, a: HospitalAppointment) {
     val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
-    val at = try { fmt.parse("${a.date} ${a.time}")?.time } catch (_: Exception) { null } ?: return
+    val at = try { fmt.parse("${normalizeScheduleDate(a.date)} ${a.time}")?.time } catch (_: Exception) { null } ?: return
     val alarm = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
     (0..3).forEach { index ->
         val pending = android.app.PendingIntent.getBroadcast(context, appointmentAlarmRequestCode(a.id, index),
@@ -295,7 +308,7 @@ private fun cancelAppointmentReminder(context: Context, id: Int) {
 private fun saveDailyEntries(context: Context, entries: List<DailyEntry>) {
     val array = JSONArray()
     entries.forEach { entry ->
-        array.put(JSONObject().put("id", entry.id).put("kind", entry.kind).put("date", entry.date)
+        array.put(JSONObject().put("id", entry.id).put("kind", entry.kind).put("date", normalizeScheduleDate(entry.date))
             .put("time", entry.time).put("title", entry.title).put("body", entry.body)
             .put("reminderMinutes", entry.reminderMinutes ?: JSONObject.NULL))
     }
@@ -312,7 +325,7 @@ private fun scheduleDailyEntryReminder(context: Context, entry: DailyEntry) {
     cancelDailyEntryReminder(context, entry.id)
     val minutes = entry.reminderMinutes ?: return
     val fmt = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).apply { isLenient = false }
-    val at = try { fmt.parse("${entry.date} ${entry.time}")?.time } catch (_: Exception) { null } ?: return
+    val at = try { fmt.parse("${normalizeScheduleDate(entry.date)} ${entry.time}")?.time } catch (_: Exception) { null } ?: return
     val triggerAt = at - minutes * 60_000L
     if (triggerAt <= System.currentTimeMillis()) return
     val intent = android.content.Intent(context, AppointmentReminderReceiver::class.java).apply {
@@ -419,7 +432,7 @@ fun EasyHealthApp(context: Context) {
         mutableStateListOf<HospitalAppointment>().apply {
             try {
                 val a = JSONArray(prefs.getString("appointments", "[]") ?: "[]")
-                for (i in 0 until a.length()) { val o = a.getJSONObject(i); val rawOffsets = o.optJSONArray("reminderOffsets") ?: JSONArray("[120]"); val offsets = (0 until rawOffsets.length()).map { rawOffsets.optInt(it) }.filter { it > 0 }; add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), o.optString("date"), o.optString("time"), o.optString("memo"), o.optString("status", "확인"), offsets)) }
+                for (i in 0 until a.length()) { val o = a.getJSONObject(i); val rawOffsets = o.optJSONArray("reminderOffsets") ?: JSONArray("[120]"); val offsets = (0 until rawOffsets.length()).map { rawOffsets.optInt(it) }.filter { it > 0 }; add(HospitalAppointment(o.optInt("id"), o.optString("hospital"), normalizeScheduleDate(o.optString("date")), o.optString("time"), o.optString("memo"), o.optString("status", "확인"), offsets)) }
             } catch (_: Exception) { }
         }
     }
@@ -429,7 +442,7 @@ fun EasyHealthApp(context: Context) {
                 val saved = JSONArray(prefs.getString("daily_entries", "[]") ?: "[]")
                 for (i in 0 until saved.length()) {
                     val o = saved.getJSONObject(i)
-                    add(DailyEntry(o.optInt("id"), o.optString("kind", "건강 일기"), o.optString("date"), o.optString("time"),
+                    add(DailyEntry(o.optInt("id"), o.optString("kind", "건강 일기"), normalizeScheduleDate(o.optString("date")), o.optString("time"),
                         o.optString("title"), o.optString("body"), if (o.isNull("reminderMinutes")) null else o.optInt("reminderMinutes")))
                 }
             } catch (_: Exception) { }
@@ -1101,7 +1114,7 @@ fun EasyHealthApp(context: Context) {
                 "일정·일기" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("날짜를 선택하면 새 기록을 입력하고, 해당 날짜의 기록을 시간순으로 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
-                    val markedDates = (appointments.map { it.date } + dailyEntries.map { it.date }).toSet()
+                    val markedDates = (appointments.map { normalizeScheduleDate(it.date) } + dailyEntries.map { normalizeScheduleDate(it.date) }).toSet()
                     HospitalCalendar(
                         selectedDate = selectedAppointmentDate,
                         markedDates = markedDates,
@@ -1165,8 +1178,8 @@ fun EasyHealthApp(context: Context) {
                             }
                         }
                         data class DayTimelineItem(val time: String, val appointment: HospitalAppointment? = null, val entry: DailyEntry? = null)
-                        val dayAppointments = appointments.filter { it.date == selectedAppointmentDate }
-                        val dayEntries = dailyEntries.filter { it.date == selectedAppointmentDate }
+                        val dayAppointments = appointments.filter { normalizeScheduleDate(it.date) == normalizeScheduleDate(selectedAppointmentDate) }
+                        val dayEntries = dailyEntries.filter { normalizeScheduleDate(it.date) == normalizeScheduleDate(selectedAppointmentDate) }
                         val dayTimeline = (dayAppointments.map { DayTimelineItem(it.time, appointment = it) } +
                             dayEntries.map { DayTimelineItem(it.time, entry = it) }).sortedBy { it.time }
                         Text("${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -1197,7 +1210,7 @@ fun EasyHealthApp(context: Context) {
                                     colors = CardDefaults.cardColors(containerColor = Color.White),
                                     shape = RoundedCornerShape(16.dp)
                                 ) {
-                                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             Spacer(Modifier.weight(1f))
@@ -1206,7 +1219,6 @@ fun EasyHealthApp(context: Context) {
                                         Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(a.memo.ifBlank { "진료 내용 미입력" }, color = Color.Gray, fontSize = 12.sp)
                                         Text(if (a.reminderOffsets.isEmpty()) "알림 없음" else "예약 알림 설정됨", color = Color.Gray, fontSize = 10.sp)
-                                        Text("눌러서 수정", color = Color.Gray, fontSize = 10.sp)
                                     }
                                 }
                             }
@@ -1233,7 +1245,7 @@ fun EasyHealthApp(context: Context) {
                                     colors = CardDefaults.cardColors(containerColor = Color.White),
                                     shape = RoundedCornerShape(16.dp)
                                 ) {
-                                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             Spacer(Modifier.weight(1f))
@@ -1242,14 +1254,13 @@ fun EasyHealthApp(context: Context) {
                                         if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(entry.body, color = Color.Gray, fontSize = 12.sp)
                                         if (entry.reminderMinutes != null) Text("알림 설정됨", color = Color.Gray, fontSize = 10.sp)
-                                        Text("눌러서 수정", color = Color.Gray, fontSize = 10.sp)
                                     }
                                 }
                             }
                         }
                     } else {
                         Text("기록이 있는 날짜", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        val recordDates = (appointments.map { it.date } + dailyEntries.map { it.date })
+                        val recordDates = (appointments.map { normalizeScheduleDate(it.date) } + dailyEntries.map { normalizeScheduleDate(it.date) })
                             .distinct()
                             .sortedDescending()
                         if (recordDates.isEmpty()) {
@@ -1761,11 +1772,12 @@ fun EasyHealthApp(context: Context) {
                 val currentEditing = editingAppointment?.takeIf { selectedEntryTab == "병원예약" }
                 if (hospital.isNotBlank() && parsed != null && (currentEditing != null || parsed.time > System.currentTimeMillis())) {
                     currentEditing?.let { cancelAppointmentReminder(context, it.id); appointments.removeAll { old -> old.id == it.id } }
-                    val saved = HospitalAppointment(currentEditing?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, date, time, memo, "확인", reminderOffsets)
+                    val eventDate = normalizeScheduleDate(date)
+                    val saved = HospitalAppointment(currentEditing?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(), hospital, eventDate, time, memo, "확인", reminderOffsets)
                     appointments.add(saved)
                     saveAppointments(context, appointments)
                     scheduleAppointmentReminder(context, saved)
-                    selectedAppointmentDate = date
+                    selectedAppointmentDate = eventDate
                     appointmentInitialDate = null
                     if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                         (context as? Activity)?.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 701)
@@ -1781,12 +1793,13 @@ fun EasyHealthApp(context: Context) {
                 val currentEditing = editingDailyEntry?.takeIf { selectedEntryTab == expectedTab }
                 if (parsed != null && body.isNotBlank()) {
                     currentEditing?.let { cancelDailyEntryReminder(context, it.id); dailyEntries.removeAll { old -> old.id == it.id } }
+                    val eventDate = normalizeScheduleDate(date)
                     val saved = DailyEntry(currentEditing?.id ?: (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
-                        dailyEntryKind, date, time, title, body, if (dailyEntryKind == "간단 메모") reminderMinutes else null)
+                        dailyEntryKind, eventDate, time, title, body, if (dailyEntryKind == "간단 메모") reminderMinutes else null)
                     dailyEntries.add(saved)
                     saveDailyEntries(context, dailyEntries)
                     scheduleDailyEntryReminder(context, saved)
-                    selectedAppointmentDate = date
+                    selectedAppointmentDate = eventDate
                     showAppointmentDialog = false
                     showDailyEntryDialog = false
                     editingAppointment = null
@@ -2455,7 +2468,7 @@ private fun DailyEntryDialog(existing: DailyEntry?, kind: String, initialDate: S
                 IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("작성 시간") }, modifier = Modifier.weight(1f), singleLine = true)
+                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("시간") }, modifier = Modifier.weight(1f), singleLine = true)
                 IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green) }
             }
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("제목 (선택)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -2595,11 +2608,17 @@ private fun ScheduleEntryDialog(
                     },
                     color = Color.Gray, fontSize = 11.sp
                 )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("날짜") }, singleLine = true, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { showDatePicker() }) { Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green) }
-                    OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("작성 시간") }, singleLine = true, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { showTimePicker() }) { Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green) }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    OutlinedTextField(value = date, onValueChange = { date = it }, label = null, singleLine = true,
+                        modifier = Modifier.weight(1.35f), placeholder = { Text("년.월.일", fontSize = 12.sp) })
+                    IconButton(onClick = { showDatePicker() }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green, modifier = Modifier.size(20.dp))
+                    }
+                    OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("시간") }, singleLine = true,
+                        modifier = Modifier.weight(0.72f), placeholder = { Text("시:분", fontSize = 12.sp) })
+                    IconButton(onClick = { showTimePicker() }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green, modifier = Modifier.size(20.dp))
+                    }
                 }
                 OutlinedTextField(
                     value = title,
