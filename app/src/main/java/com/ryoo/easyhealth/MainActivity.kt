@@ -838,31 +838,23 @@ fun EasyHealthApp(context: Context) {
         minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
     )
     val a1cReportPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
-        "3개월" -> (2 downTo 0).map { monthOffset ->
-            // 각 월의 추정치는 해당 월과 직전 두 달, 총 3개월의 시간 가중 혈당으로 계산합니다.
-            val targetMonthStart = Calendar.getInstance().apply {
-                timeInMillis = now
-                set(Calendar.DAY_OF_MONTH, 1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                add(Calendar.MONTH, -monthOffset)
-            }.timeInMillis
-            val windowStart = Calendar.getInstance().apply {
-                timeInMillis = targetMonthStart
-                add(Calendar.MONTH, -2)
-            }.timeInMillis
-            val windowEnd = if (monthOffset == 0) now else Calendar.getInstance().apply {
-                timeInMillis = targetMonthStart
-                add(Calendar.MONTH, 1)
-            }.timeInMillis
-            val label = SimpleDateFormat("yyyy.MM", Locale.KOREA).format(Date(targetMonthStart))
+        "1개월" -> (3 downTo 0).map { weekOffset ->
+            val periodEnd = now - weekOffset * 7L * 24L * 60L * 60L * 1000L
+            val periodStart = periodEnd - 7L * 24L * 60L * 60L * 1000L
+            val label = "${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodStart))} ~ ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodEnd))}"
             label to calculateTimeWeightedGlucoseEstimate(
-                records = reportGlucoseRecords,
-                nowMillis = now,
-                windowStartMillis = windowStart,
-                windowEndMillis = windowEnd,
+                records = reportGlucoseRecords, nowMillis = now,
+                windowStartMillis = periodStart, windowEndMillis = periodEnd,
+                minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
+            )
+        }
+        "3개월" -> (2 downTo 0).map { monthOffset ->
+            val periodEnd = Calendar.getInstance().apply { timeInMillis = now; add(Calendar.MONTH, -monthOffset) }.timeInMillis
+            val periodStart = Calendar.getInstance().apply { timeInMillis = periodEnd; add(Calendar.MONTH, -1) }.timeInMillis
+            val label = "${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodStart))} ~ ${SimpleDateFormat("MM.dd", Locale.KOREA).format(Date(periodEnd))}"
+            label to calculateTimeWeightedGlucoseEstimate(
+                records = reportGlucoseRecords, nowMillis = now,
+                windowStartMillis = periodStart, windowEndMillis = periodEnd,
                 minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
             )
         }
@@ -872,18 +864,12 @@ fun EasyHealthApp(context: Context) {
                 var windowStart: Long = firstReading
                 while (windowStart < now) {
                     val windowEnd: Long = minOf(
-                        Calendar.getInstance().apply {
-                            timeInMillis = windowStart
-                            add(Calendar.MONTH, 3)
-                        }.timeInMillis,
-                        now
+                        Calendar.getInstance().apply { timeInMillis = windowStart; add(Calendar.MONTH, 3) }.timeInMillis, now
                     )
                     val label = "${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowStart))} ~ ${SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(windowEnd))}"
                     points.add(label to calculateTimeWeightedGlucoseEstimate(
-                        records = reportGlucoseRecords,
-                        nowMillis = now,
-                        windowStartMillis = windowStart,
-                        windowEndMillis = windowEnd,
+                        records = reportGlucoseRecords, nowMillis = now,
+                        windowStartMillis = windowStart, windowEndMillis = windowEnd,
                         minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L
                     ))
                     if (windowEnd <= windowStart) break
@@ -892,7 +878,7 @@ fun EasyHealthApp(context: Context) {
                 points
             } ?: emptyList()
         }
-        else -> listOf("최근 3개월 참고" to reportA1cEstimate)
+        else -> listOf("기록 탭과 동일한 최근 3개월 추정" to reportA1cEstimate)
     }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Green, secondary = Green, background = Color(0xFFF4F8F5), surface = Color.White)) {
@@ -1125,10 +1111,8 @@ fun EasyHealthApp(context: Context) {
                             appointmentInitialDate = it
                             editingAppointment = null
                             editingDailyEntry = null
-                            if (selectedEntryTab == "건강일기") dailyEntryKind = "건강 일기"
-                            if (selectedEntryTab == "간단메모") dailyEntryKind = "간단 메모"
                             showAppointmentDialog = false
-                            showDailyEntryDialog = true
+                            showDailyEntryDialog = false
                         },
                         onDateLongPressed = {
                             selectedAppointmentDate = it
@@ -1203,7 +1187,10 @@ fun EasyHealthApp(context: Context) {
                                         },
                                         onLongClick = {
                                             editingAppointment = a
+                                            editingDailyEntry = null
+                                            selectedEntryTab = "병원예약"
                                             appointmentInitialDate = a.date
+                                            showDailyEntryDialog = false
                                             showAppointmentDialog = true
                                         }
                                     ),
@@ -1236,7 +1223,10 @@ fun EasyHealthApp(context: Context) {
                                         },
                                         onLongClick = {
                                             editingDailyEntry = entry
+                                            editingAppointment = null
                                             dailyEntryKind = entry.kind
+                                            selectedEntryTab = if (entry.kind == "건강 일기") "건강일기" else "간단메모"
+                                            showAppointmentDialog = false
                                             showDailyEntryDialog = true
                                         }
                                     ),
@@ -1308,34 +1298,6 @@ fun EasyHealthApp(context: Context) {
                         "3개월" -> "현재부터 3개월 전까지"
                         else -> "전체 기록 기준"
                     }, color = Color.Gray, fontSize = 12.sp)
-                    if (reportEnabledTypes.contains("혈당") || reportGlucoseRecords.isNotEmpty()) {
-                        Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(
-                                    if (reportPeriod == "3개월") "당화혈색소 추정치 · 월별" else if (reportPeriod == "전체") "당화혈색소 추정치 · 3개월 단위" else "당화혈색소 추정치 · 최근 3개월 참고",
-                                    color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp
-                                )
-                                if (a1cReportPoints.isEmpty()) Text("혈당 측정 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
-                                a1cReportPoints.forEach { (periodLabel, estimate) ->
-                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        Text(periodLabel, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                        Text(
-                                            estimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
-                                            color = estimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
-                                            fontSize = 22.sp, fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            estimate?.let {
-                                                "시간 가중 평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 측정 ${it.measurementCount}회 · 유효 구간 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
-                                            } ?: "해당 구간의 측정 횟수, 측정 기간 또는 유효 시간 구간이 부족합니다.",
-                                            color = Color.Gray, fontSize = 10.sp
-                                        )
-                                    }
-                                }
-                                Text("실제 검사실 당화혈색소가 아닌 참고용 추정치입니다.", color = Color.Gray, fontSize = 10.sp)
-                            }
-                        }
-                    }
                     if (reportVitalTypes.isEmpty()) {
                         Text("등록된 기기의 측정 기록이 쌓이면 여기에 표시됩니다.", color = Color.Gray)
                     } else {
@@ -1484,6 +1446,24 @@ fun EasyHealthApp(context: Context) {
                                         Text("최고 ${numericValues.maxOrNull()} · 최저 ${numericValues.minOrNull()} · 총 ${summaryCount}회", color = Ink, fontSize = 12.sp)
                                     } else {
                                         Text("총 ${vitalRows.size}건", color = Green, fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                                    }
+                                    if (vital == "혈당") {
+                                        HorizontalDivider(color = Color(0xFFD5E8D9), modifier = Modifier.padding(vertical = 5.dp))
+                                        Text("당화혈색소 추정", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                        if (a1cReportPoints.isEmpty()) Text("혈당 측정 기록이 없습니다.", color = Color.Gray, fontSize = 12.sp)
+                                        a1cReportPoints.forEach { (periodLabel, estimate) ->
+                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text(periodLabel, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(estimate?.let { String.format(Locale.KOREA, "%.1f%%", it.estimatedA1cPercent) } ?: "측정 데이터 부족",
+                                                        color = estimate?.let { riskFor("당화혈색소 추정치", it.estimatedA1cPercent.toString(), selectedProfile).color } ?: Color.Gray,
+                                                        fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                                    Text(estimate?.let { "평균혈당 ${String.format(Locale.KOREA, "%.1f", it.averageMgDl)} mg/dL · 당화혈색소 ${it.measurementCount}회" } ?: "유효 측정 데이터 부족",
+                                                        color = Color.Gray, fontSize = 10.sp)
+                                                }
+                                            }
+                                        }
+                                        Text("기록 탭과 같은 시간 가중 계산 · 실제 검사실 수치가 아닌 참고용 추정치", color = Color.Gray, fontSize = 10.sp)
                                     }
                                     vitalRows.lastOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
                                 }
@@ -2531,6 +2511,7 @@ private fun ScheduleEntryDialog(
         else -> normalizeKind(initialKind)
     }
     var entryKind by remember(existingAppointment, existingDailyEntry, initialDate, initialKind) { mutableStateOf(firstKind) }
+    LaunchedEffect(entryKind) { onKindChange(entryKind) }
     var date by remember(existingAppointment, existingDailyEntry, initialDate) {
         mutableStateOf(existingAppointment?.date ?: existingDailyEntry?.date ?: initialDate)
     }
@@ -2632,8 +2613,8 @@ private fun ScheduleEntryDialog(
                     onValueChange = { body = it },
                     label = { Text(when (entryKind) { "병원예약" -> "진료 내용 / 메모"; "건강일기" -> "오늘의 건강 일기"; else -> "메모 내용" }) },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 4,
-                    maxLines = 7
+                    minLines = 2,
+                    maxLines = 4
                 )
                 if (entryKind == "건강일기") {
                     Text("건강 일기는 알림 없이 기록됩니다.", color = Color.Gray, fontSize = 11.sp)
