@@ -49,3 +49,5 @@
 
 | 2026-11-27 | 1.54 TEST | `feature/v1.41-health-schedule-diary` | 성공 | CI run 45998604337 성공. 단위 테스트, APK 빌드, package/version 및 격리 테스트 서명 검증, artifact 업로드 완료. Artifact `Easy-Health-1.54-Test` (15197566422, 17,662,104 bytes). Package `com.ryoo.easyhealth.test143`, versionCode 54. 실기기 설치 여부는 별도 확인. |
 | 2026-11-27 | 1.55 TEST | `feature/v1.41-health-schedule-diary` | **성공** | CI run 46005185116 성공. 단위 테스트, APK 빌드, package/version(1.55/55), 테스트 서명키 지문, artifact 업로드 모두 통과. Artifact `Easy-Health-1.55-Test` (15200952150, 17,671,661 bytes). Package `com.ryoo.easyhealth.test143`. 실기기 설치·화면 동작은 미검증. 상세: [2026-11-27-v1.55-test-build.md](2026-11-27-v1.55-test-build.md). |
+
+| 2026-11-28 | 1.56 TEST | `feature/v1.41-health-schedule-diary` | **성공** | CI run 46148001851 성공. 최초 실행 46147838713은 `selectedMonthKey월` Kotlin 문자열 보간 오류로 실패했으며, `${selectedMonthKey}월`로 수정 후 동일 버전 1.56 재빌드. 단위 테스트, APK 빌드, package/version(1.56/56), 기존 테스트 서명키 지문, artifact 업로드 모두 통과. Artifact `Easy-Health-1.56-Test` (15264317945, 17,675,021 bytes). Package `com.ryoo.easyhealth.test143`. 실기기 설치·화면 동작은 사용자 확인 대기. 상세: [2026-11-28-v1.56-test-build.md](2026-11-28-v1.56-test-build.md). |
