@@ -843,21 +843,16 @@ fun EasyHealthApp(context: Context) {
         dinnerTime = selectedProfile.dinnerTime,
         bedtime = selectedProfile.bedtime
     )
-    // 1.58: 실제 혈당 실측값만 사용한다. 각 측정값은 다음 측정 시각까지의
-    // 경과 시간만큼 가중하며, 6시간을 초과하는 공백은 임의 보간하지 않는다.
-    // 기록 탭과 모든 리포트는 동일 함수로 각 종료일 직전 90일을 계산한다.
+    // 1.58 experimental model: auto-tag actual readings into eight daily slots,
+    // fill missing slots from actual personal history, then apply a 30-day
+    // exponential recency half-life. Record and every report share this function.
     val a1cWindowMillis = 90L * 24L * 60L * 60L * 1000L
     fun calculateActualReadingA1c(periodEnd: Long): TimeWeightedGlucoseEstimate? =
-        calculateTimeWeightedGlucoseEstimate(
+        calculateSlotBasedGlucoseEstimate(
             records = reportGlucoseRecords,
-            nowMillis = periodEnd,
-            maxGapMillis = 6L * 60L * 60L * 1000L,
-            minimumMeasurements = 14,
-            minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L,
-            minimumCoveredMillis = 24L * 60L * 60L * 1000L,
-            windowStartMillis = periodEnd - a1cWindowMillis,
-            windowEndMillis = periodEnd
-        )
+            endMillis = periodEnd,
+            schedule = a1cSchedule
+        )?.estimate
     val timeWeightedA1cEstimate = calculateActualReadingA1c(a1cReferenceEnd)
     val a1cReportPeriod = vitalReportPeriods["혈당"] ?: reportPeriod
     val reportA1cPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (a1cReportPeriod) {
