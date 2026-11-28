@@ -55,3 +55,6 @@
 | 2026-11-28 | 1.58 TEST | `feature/v1.41-health-schedule-diary` | 빌드 진행 | 사용자 지정 버전. 당화혈색소만 실제 혈당 실측값의 다음 측정까지 경과시간으로 가중 평균을 구하도록 변경. 6시간 초과 공백과 마지막 측정 이후 시간은 제외. ADAG 환산식 유지. 기록·리포트 공통 함수 사용. versionName 1.58 / versionCode 58. |
 
 | 2026-11-28 | 1.58 TEST attempt 1 | `feature/v1.41-health-schedule-diary` | 실패 — 재시도 | CI run 46152045650. 기존 테스트 서명키 복원은 성공했으나 workflow의 SHA256 grep이 SHA258로 오기되어 서명 인증서 확인 단계에서 종료. Gradle/단위 테스트/APK 빌드는 시작하지 않아 버전 미소비. 상세: `2026-11-28-v1.58-test-build-attempt1.md`. |
+
+| 2026-11-28 | 1.58 TEST attempt 2 | `feature/v1.41-health-schedule-diary` | 실패 — 테스트 수정 후 재빌드 | CI run 46152126486. 서명키 복원 및 인증서 확인, Kotlin 컴파일까지 통과. 단위 테스트 15개 중 1개 실패(`intervalsLongerThanSixHoursAreNotCarriedForward`). 8시간 공백 구간은 제외되고 100 mg/dL 측정값의 다음 1시간만 유효하므로 기대값 200은 테스트 오류로 판단. APK 빌드 전 중단, 버전 미소비. 상세: `2026-11-28-v1.58-test-build-attempt2.md`. |
+| 2026-11-28 | 1.58 TEST retry | `feature/v1.41-health-schedule-diary` | 진행 중 | 8개 시간대 자동 분류·개인 실측 기반 결측 보정·30일 반감기(최근 30일 가중치 50% 초과)·ADAG 환산을 공통 계산 엔진에 적용. 실패 테스트 기대값 수정 및 최근 30일 가중 검증 테스트 추가. 기존 테스트 package/signing key 유지. CI run 46152727484. |
