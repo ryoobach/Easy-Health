@@ -5,6 +5,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+// v1.58 retry: preserve SHA-256 signing verification and test actual-reading time weighting.
 class GlucoseTimeWeightedAverageTest {
     private val hour = 60L * 60L * 1000L
     private val day = 24L * hour
