@@ -126,7 +126,8 @@ private fun glucoseClockMinutes(value: String, fallback: Int): Int {
 /**
  * Creates exactly eight timestamped values for each of the 90 calendar dates
  * ending on endMillis. Actual readings are assigned to the nearest configured
- * slot (within 150 minutes); missing values use actual same-slot history only.
+ * slot (within 150 minutes); missing values use actual history only. The final
+ * mean applies an exponential 30-day half-life to the eight slots per day.
  * Estimated values are never fed back into the historical averages.
  */
 internal fun calculateSlotBasedGlucoseEstimate(
@@ -262,24 +263,29 @@ internal fun calculateSlotBasedGlucoseEstimate(
         }
     }
     if (slots.size != 720) return null
-    val synthetic = slots.mapIndexed { index, slot ->
-        VitalRecord("estimated-slot-$index", "__a1c__", "혈당",
-            String.format(java.util.Locale.US, "%.4f", slot.valueMgDl),
-            slot.timestamp, if (slot.estimated) "추정값" else "실측값")
+    // Experimental recency decay: a 30-day half-life gives the latest 30 days
+    // more than half of the total weight across this 90-day window.
+    // Each of the eight daily representative slots contributes equally before
+    // the day-level recency weight is applied.
+    val weightedValues = slots.map { slot ->
+        val ageDays = ((windowEnd - slot.timestamp).coerceAtLeast(0L)).toDouble() / dayMillis.toDouble()
+        val recencyWeight = Math.pow(0.5, ageDays / 30.0)
+        slot.valueMgDl to recencyWeight
     }
-    val start = dayStarts[21]
-    val estimate = calculateTimeWeightedGlucoseEstimate(
-        records = synthetic,
-        nowMillis = windowEnd,
-        maxGapMillis = 12L * hourMillis,
-        minimumMeasurements = 14,
-        minimumSpanMillis = 7L * dayMillis,
-        minimumCoveredMillis = 24L * hourMillis,
-        windowStartMillis = start,
-        windowEndMillis = windowEnd
-    ) ?: return null
+    val totalWeight = weightedValues.sumOf { it.second }
+    if (totalWeight <= 0.0) return null
+    val weightedAverage = weightedValues.sumOf { it.first * it.second } / totalWeight
+    val estimate = TimeWeightedGlucoseEstimate(
+        averageMgDl = weightedAverage,
+        estimatedA1cPercent = (weightedAverage + 46.7) / 28.7,
+        measurementCount = slots.size,
+        intervalCount = slots.size,
+        coveredMillis = 90L * dayMillis,
+        firstTimestamp = slots.first().timestamp,
+        lastTimestamp = slots.last().timestamp
+    )
     return SlotBasedGlucoseEstimate(
-        estimate = estimate.copy(measurementCount = slots.size),
+        estimate = estimate,
         slots = slots,
         actualSlotCount = slots.count { !it.estimated },
         estimatedSlotCount = slots.count { it.estimated }
