@@ -132,6 +132,21 @@ class GlucoseTimeWeightedAverageTest {
         assertEquals(7.0, result.estimatedA1cPercent, 0.001)
     }
 
+    @Test fun actualReadingsAreWeightedUntilNextReadingOnly() {
+        val result = estimate(listOf(reading("100", 0), reading("200", 2 * hour), reading("300", 5 * hour)))
+        assertNotNull(result)
+        assertEquals(160.0, result!!.averageMgDl, 0.0001)
+        assertEquals(5 * hour, result.coveredMillis)
+        assertEquals((160.0 + 46.7) / 28.7, result.estimatedA1cPercent, 0.0001)
+    }
+
+    @Test fun intervalsLongerThanSixHoursAreNotCarriedForward() {
+        val result = estimate(listOf(reading("250", 0), reading("100", 8 * hour), reading("200", 9 * hour)))
+        assertNotNull(result)
+        assertEquals(200.0, result!!.averageMgDl, 0.0001)
+        assertEquals(hour, result.coveredMillis)
+    }
+
     @Test fun laboratoryHbA1cRecordIsNotChangedOrUsedAsGlucose() {
         val lab = reading("7.2", 0, type = "당화혈색소")
         val before = lab.copy()

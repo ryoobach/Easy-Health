@@ -843,15 +843,28 @@ fun EasyHealthApp(context: Context) {
         dinnerTime = selectedProfile.dinnerTime,
         bedtime = selectedProfile.bedtime
     )
-    // 기록 탭과 리포트 탭은 동일한 90일 × 하루 8개 시간대 엔진을 공유합니다.
-    val slotBasedA1c = calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, a1cReferenceEnd, a1cSchedule)
-    val timeWeightedA1cEstimate = slotBasedA1c?.estimate
+    // 1.58: 실제 혈당 실측값만 사용한다. 각 측정값은 다음 측정 시각까지의
+    // 경과 시간만큼 가중하며, 6시간을 초과하는 공백은 임의 보간하지 않는다.
+    // 기록 탭과 모든 리포트는 동일 함수로 각 종료일 직전 90일을 계산한다.
+    val a1cWindowMillis = 90L * 24L * 60L * 60L * 1000L
+    fun calculateActualReadingA1c(periodEnd: Long): TimeWeightedGlucoseEstimate? =
+        calculateTimeWeightedGlucoseEstimate(
+            records = reportGlucoseRecords,
+            nowMillis = periodEnd,
+            maxGapMillis = 6L * 60L * 60L * 1000L,
+            minimumMeasurements = 14,
+            minimumSpanMillis = 7L * 24L * 60L * 60L * 1000L,
+            minimumCoveredMillis = 24L * 60L * 60L * 1000L,
+            windowStartMillis = periodEnd - a1cWindowMillis,
+            windowEndMillis = periodEnd
+        )
+    val timeWeightedA1cEstimate = calculateActualReadingA1c(a1cReferenceEnd)
     val a1cReportPeriod = vitalReportPeriods["혈당"] ?: reportPeriod
     val reportA1cPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (a1cReportPeriod) {
         "1개월" -> (0..3).map { weekOffset ->
             val periodEnd = a1cReferenceEnd - weekOffset * 7L * 24L * 60L * 60L * 1000L
             val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
-            label to calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, periodEnd, a1cSchedule)?.estimate
+            label to calculateActualReadingA1c(periodEnd)
         }
         "3개월" -> (0..2).map { monthOffset ->
             val periodEnd = Calendar.getInstance().apply {
@@ -860,7 +873,7 @@ fun EasyHealthApp(context: Context) {
                 if (monthOffset > 0) add(Calendar.DAY_OF_YEAR, -1)
             }.timeInMillis
             val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
-            label to calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, periodEnd, a1cSchedule)?.estimate
+            label to calculateActualReadingA1c(periodEnd)
         }
         "전체" -> {
             val points = mutableListOf<Pair<String, TimeWeightedGlucoseEstimate?>>()
@@ -868,8 +881,8 @@ fun EasyHealthApp(context: Context) {
             val earliest = reportGlucoseRecords.minOfOrNull { it.timestamp } ?: latestGlucoseTimestamp
             while (periodEnd >= earliest) {
                 val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
-                points.add(label to calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, periodEnd, a1cSchedule)?.estimate)
-                periodEnd -= 90L * 24L * 60L * 60L * 1000L
+                points.add(label to calculateActualReadingA1c(periodEnd))
+                periodEnd -= a1cWindowMillis
             }
             points
         }
@@ -973,7 +986,7 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             Text(
                                                 timeWeightedA1cEstimate?.let {
-                                                    "총 ${it.measurementCount}회 · 실측 ${slotBasedA1c?.actualSlotCount ?: 0}회 · 추정 ${slotBasedA1c?.estimatedSlotCount ?: 0}회"
+                                                    "실측 ${it.measurementCount}회 · 시간 반영 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
                                                 } ?: "기록량 부족 또는 긴 공백으로 추정 불가",
                                                 color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp
                                             )

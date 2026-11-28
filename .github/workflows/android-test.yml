@@ -18,7 +18,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: easy-health-test-apk-v156
+  group: easy-health-test-apk-v158
   cancel-in-progress: false
 jobs:
   build-test:
@@ -47,7 +47,7 @@ jobs:
           exit 1
       - name: Record test signing certificate
         run: |
-          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA256:'
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA258:'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
@@ -67,9 +67,9 @@ jobs:
           echo "Version code: $VERSION_CODE"
           echo "Version name: $VERSION_NAME"
           test "$APP_ID" = "com.ryoo.easyhealth.test143"
-          test "$VERSION_CODE" = "56"
-          test "$VERSION_NAME" = "1.56"
-          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.56 TEST'
+          test "$VERSION_CODE" = "58"
+          test "$VERSION_NAME" = "1.58"
+          "$APK_ANALYZER" manifest print "$APK" | grep -F 'Easy Health 1.58 TEST'
       - name: Verify isolated test signature
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
@@ -83,10 +83,10 @@ jobs:
           test "$APK_SHA" != "$EXPECTED_PRODUCTION_SHA"
       - name: Package test APK and installation guide
         run: |
-          mkdir -p "Easy-Health-1.56-Test"
-          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.56-Test/Easy-Health-1.56-Test.apk"
-          printf "Easy Health 1.56 테스트 앱 설치 안내\\n\\n기존 Easy Health 정식 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test143로 설치되므로 정식 앱과 함께 설치됩니다.\\n기존 테스트 앱이 설치되어 있다면 같은 패키지와 기존 테스트 서명으로 업데이트됩니다.\\n테스트 앱의 데이터는 정식 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.56-Test/설치안내.txt"
+          mkdir -p "Easy-Health-1.58-Test"
+          cp app/build/outputs/apk/debug/app-debug.apk "Easy-Health-1.58-Test/Easy-Health-1.58-Test.apk"
+          printf "Easy Health 1.58 테스트 앱 설치 안내\\n\\n기존 Easy Health 정식 앱은 삭제하지 마세요.\\n이 APK는 별도 패키지 com.ryoo.easyhealth.test143로 설치되므로 정식 앱과 함께 설치됩니다.\\n기존 테스트 앱이 설치되어 있다면 같은 패키지와 기존 테스트 서명으로 업데이트됩니다.\\n테스트 앱의 데이터는 정식 앱과 공유되지 않습니다.\\n" > "Easy-Health-1.58-Test/설치안내.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: Easy-Health-1.56-Test
-          path: "Easy-Health-1.56-Test/*"
+          name: Easy-Health-1.58-Test
+          path: "Easy-Health-1.58-Test/*"
