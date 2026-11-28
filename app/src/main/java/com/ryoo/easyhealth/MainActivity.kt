@@ -981,11 +981,11 @@ fun EasyHealthApp(context: Context) {
                                             }
                                             Text(
                                                 timeWeightedA1cEstimate?.let {
-                                                    "실측 ${it.measurementCount}회 · 시간 반영 ${String.format(Locale.KOREA, "%.1f", it.coveredHours)}시간"
+                                                    "실측 ${it.measurementCount}회 · 보정 ${it.estimatedSlotCount}칸 · 시간대 ${it.representedSlotCount}/8개"
                                                 } ?: "기록량 부족 또는 긴 공백으로 추정 불가",
                                                 color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp
                                             )
-                                            Text("최근 90일 시간 가중 추정 · 실제 검사값 아님", color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp)
+                                            Text("최근 90일 시간대별 보정·최근 혈당 가중 추정 · 실제 검사값 아님", color = Color.Gray, fontSize = 7.sp, lineHeight = 8.sp)
                                         }
                                     }
                                 }
@@ -1478,7 +1478,7 @@ fun EasyHealthApp(context: Context) {
                                                     fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                             }
                                         }
-                                        Text("기록 탭과 같은 시간 가중 계산 · 실제 검사실 수치가 아닌 참고용 추정치", color = Color.Gray, fontSize = 10.sp)
+                                        Text("기록 탭과 같은 시간대별 보정 계산 · 실제 검사실 수치가 아닌 참고용 추정치", color = Color.Gray, fontSize = 10.sp)
                                     }
                                     vitalRows.lastOrNull()?.let { Text("최근 측정: ${dateFormat.format(Date(it.timestamp))}", color = Color.Gray, fontSize = 11.sp) }
                                 }

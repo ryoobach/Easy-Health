@@ -15,7 +15,10 @@ internal data class TimeWeightedGlucoseEstimate(
     val intervalCount: Int,
     val coveredMillis: Long,
     val firstTimestamp: Long,
-    val lastTimestamp: Long
+    val lastTimestamp: Long,
+    val actualSlotCount: Int = 0,
+    val estimatedSlotCount: Int = 0,
+    val representedSlotCount: Int = 0
 ) {
     val coveredHours: Double
         get() = coveredMillis / 3_600_000.0
@@ -136,7 +139,6 @@ internal fun calculateSlotBasedGlucoseEstimate(
     schedule: GlucoseDailySchedule = GlucoseDailySchedule()
 ): SlotBasedGlucoseEstimate? {
     val dayMillis = 24L * 60L * 60L * 1000L
-    val hourMillis = 60L * 60L * 1000L
     val endCalendar = java.util.Calendar.getInstance().apply { timeInMillis = endMillis }
     endCalendar.set(java.util.Calendar.HOUR_OF_DAY, 23)
     endCalendar.set(java.util.Calendar.MINUTE, 59)
@@ -151,38 +153,50 @@ internal fun calculateSlotBasedGlucoseEstimate(
         set(java.util.Calendar.MILLISECOND, 0)
         add(java.util.Calendar.DAY_OF_YEAR, -89)
     }
-    // Keep the preceding 21 days as real-measurement history for the first
-    // dates in the requested 90-day window.
+    val windowStart = firstDay.timeInMillis
+    val historyStart = java.util.Calendar.getInstance().apply {
+        timeInMillis = windowStart
+        add(java.util.Calendar.DAY_OF_YEAR, -21)
+    }.timeInMillis
     val dayStarts = (-21 until 90).map { offset ->
         java.util.Calendar.getInstance().apply {
-            timeInMillis = firstDay.timeInMillis
+            timeInMillis = windowStart
             add(java.util.Calendar.DAY_OF_YEAR, offset)
         }.timeInMillis
     }
-    val wake = glucoseClockMinutes(schedule.wakeTime, 7 * 60)
-    val breakfast = glucoseClockMinutes(schedule.breakfastTime, 8 * 60)
-    val lunch = glucoseClockMinutes(schedule.lunchTime, 12 * 60)
-    val dinner = glucoseClockMinutes(schedule.dinnerTime, 18 * 60)
-    val bed = glucoseClockMinutes(schedule.bedtime, 22 * 60)
-    val slotMinutes = listOf(wake, (breakfast - 15 + 1440) % 1440, (breakfast + 120) % 1440,
+
+    fun clockMinutes(value: String, fallback: Int): Int {
+        val parts = value.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()
+        val minute = parts.getOrNull(1)?.toIntOrNull()
+        return if (hour in 0..23 && minute in 0..59) hour!! * 60 + minute!! else fallback
+    }
+    val wake = clockMinutes(schedule.wakeTime, 7 * 60)
+    val breakfast = clockMinutes(schedule.breakfastTime, 8 * 60)
+    val lunch = clockMinutes(schedule.lunchTime, 12 * 60)
+    val dinner = clockMinutes(schedule.dinnerTime, 18 * 60)
+    val bedtime = clockMinutes(schedule.bedtime, 22 * 60)
+    val slotMinutes = listOf(
+        wake,
+        (breakfast - 15 + 1440) % 1440, (breakfast + 120) % 1440,
         (lunch - 15 + 1440) % 1440, (lunch + 120) % 1440,
-        (dinner - 15 + 1440) % 1440, (dinner + 120) % 1440, bed)
+        (dinner - 15 + 1440) % 1440, (dinner + 120) % 1440,
+        bedtime
+    )
+    fun slotTimestamp(dayStart: Long, slot: Int): Long =
+        dayStart + slotMinutes[slot].toLong() * 60_000L
 
-    fun slotTimestamp(dayStart: Long, minute: Int): Long =
-        dayStart + minute.toLong() * 60_000L
-
+    // Keep only the preceding 21 days as historical evidence plus the requested
+    // 90-day window. Never allow distant lifetime averages to fill a missing slot.
     val actualRecords = records.asSequence()
-        .filter { it.type == "혈당" }
+        .filter { it.type == "혈당" && it.timestamp in historyStart..windowEnd }
         .mapNotNull { record ->
             val value = record.value.trim().toDoubleOrNull()
-            if (value == null || !value.isFinite() || value <= 0.0 || record.timestamp > windowEnd) null
-            else record to value
-        }.toList()
-
-    // Slot assignments contain real readings only. Multiple actual readings
-    // assigned to one slot are averaged; an estimated value can never enter here.
-    val actualByDay = mutableMapOf<Int, MutableMap<Int, MutableList<Double>>>()
-    val actualAssignedIds = mutableSetOf<String>()
+            if (value == null || !value.isFinite() || value <= 0.0) null else record to value
+        }
+        .toList()
+    val actualByDay = mutableMapOf<Int, MutableMap<Int, MutableList<Pair<String, Double>>>>()
+    val assignedWindowReadingIds = mutableSetOf<String>()
     actualRecords.forEach { (record, value) ->
         val cal = java.util.Calendar.getInstance().apply { timeInMillis = record.timestamp }
         cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -191,26 +205,36 @@ internal fun calculateSlotBasedGlucoseEstimate(
         cal.set(java.util.Calendar.MILLISECOND, 0)
         val dayIndex = dayStarts.binarySearch(cal.timeInMillis)
         if (dayIndex !in 0..110) return@forEach
-        val nearest = slotMinutes.indices.minByOrNull { index ->
-            kotlin.math.abs(slotTimestamp(dayStarts[dayIndex], slotMinutes[index]) - record.timestamp)
+        val nearest = slotMinutes.indices.minByOrNull { slot ->
+            kotlin.math.abs(slotTimestamp(dayStarts[dayIndex], slot) - record.timestamp)
         } ?: return@forEach
-        val distance = kotlin.math.abs(slotTimestamp(dayStarts[dayIndex], slotMinutes[nearest]) - record.timestamp)
+        val distance = kotlin.math.abs(slotTimestamp(dayStarts[dayIndex], nearest) - record.timestamp)
         if (distance <= 150L * 60_000L) {
             actualByDay.getOrPut(dayIndex) { mutableMapOf() }
-                .getOrPut(nearest) { mutableListOf() }.add(value)
-            actualAssignedIds.add(record.id)
+                .getOrPut(nearest) { mutableListOf() }.add(record.id to value)
+            if (record.timestamp >= windowStart) assignedWindowReadingIds.add(record.id)
         }
     }
-    val actualValues = actualByDay.mapValues { (_, slots) -> slots.mapValues { (_, values) -> values.average() } }
-    val allHistoricalActual = actualRecords.map { it.second }
-    if (allHistoricalActual.isEmpty()) return null
-    val globalFallback = allHistoricalActual.average()
+    val actualValues = actualByDay.mapValues { (_, slotMap) ->
+        slotMap.mapValues { (_, readings) -> readings.map { it.second }.average() }
+    }
+    val actualWindowRecords = actualRecords.filter { it.first.timestamp >= windowStart }
+        .filter { record -> assignedWindowReadingIds.contains(record.first.id) }
+    val distinctActualTimes = actualWindowRecords.map { it.first.timestamp }.distinct().sorted()
+    if (assignedWindowReadingIds.size < 14 || distinctActualTimes.size < 14) return null
+    if (distinctActualTimes.last() - distinctActualTimes.first() < 7L * dayMillis) return null
+
+    val actualSlotIndices = actualValues.filterKeys { it in 21..110 }
+        .values.flatMap { it.keys }.toSet()
+    // Require real observations in at least half of the daily slots before
+    // presenting a whole-day estimate. Otherwise sampling bias is too severe.
+    if (actualSlotIndices.size < 4) return null
 
     fun historicalSlotAverage(dayIndex: Int, slot: Int): Double? {
         for (span in listOf(7, 14, 21)) {
             val values = (maxOf(0, dayIndex - span) until dayIndex)
                 .mapNotNull { actualValues[it]?.get(slot) }
-            if (values.isNotEmpty()) return values.average()
+            if (values.size >= 2) return values.average()
         }
         return null
     }
@@ -222,7 +246,9 @@ internal fun calculateSlotBasedGlucoseEstimate(
                 val post = pair[postSlot] ?: return@mapNotNull null
                 post - pre
             }
-            if (deltas.isNotEmpty()) return deltas.average()
+            // Require at least three actual paired days before applying a
+            // personal meal-rise correction; one isolated pair is not enough.
+            if (deltas.size >= 3) return deltas.average()
         }
         return null
     }
@@ -231,63 +257,91 @@ internal fun calculateSlotBasedGlucoseEstimate(
     for (dayIndex in 21..110) {
         val dayStart = dayStarts[dayIndex]
         for (slot in 0 until 8) {
-            val timestamp = slotTimestamp(dayStart, slotMinutes[slot])
+            val timestamp = slotTimestamp(dayStart, slot)
             val actual = actualValues[dayIndex]?.get(slot)
             if (actual != null) {
                 slots.add(GlucoseDailySlot(timestamp, actual, slot, false))
                 continue
             }
+
+            // First choice: same-slot averages from at least two distinct days
+            // in the preceding 1, 2, or 3 weeks, using actual readings only.
             var estimate = historicalSlotAverage(dayIndex, slot)
-            if (estimate == null && slot in listOf(1, 2, 3, 4, 5, 6)) {
+
+            // Second choice: use the person's measured pre/post-meal delta only
+            // when three or more historical paired days support that delta.
+            if (estimate == null && slot in 1..6) {
                 val preSlot = if (slot % 2 == 0) slot - 1 else slot
                 val postSlot = preSlot + 1
                 val delta = historicalMealDelta(dayIndex, preSlot, postSlot)
                 val sameDayActual = actualValues[dayIndex]
                 estimate = when {
-                    slot == postSlot && sameDayActual?.get(preSlot) != null ->
-                        sameDayActual.getValue(preSlot) + (delta ?: 0.0)
-                    slot == preSlot && sameDayActual?.get(postSlot) != null ->
-                        sameDayActual.getValue(postSlot) - (delta ?: 0.0)
+                    delta != null && slot == postSlot && sameDayActual?.get(preSlot) != null ->
+                        sameDayActual.getValue(preSlot) + delta
+                    delta != null && slot == preSlot && sameDayActual?.get(postSlot) != null ->
+                        sameDayActual.getValue(postSlot) - delta
                     else -> null
                 }
             }
-            // Bedtime: if no same-slot history exists, bridge actual dinner-post
-            // and next-morning fasting values. Neither endpoint may be estimated.
+
+            // Bedtime can be interpolated only between two actual anchors:
+            // dinner-post on this day and fasting on the following morning.
             if (estimate == null && slot == 7) {
                 val dinnerPost = actualValues[dayIndex]?.get(6)
                 val nextFasting = actualValues[dayIndex + 1]?.get(0)
-                if (dinnerPost != null && nextFasting != null) estimate = (dinnerPost + nextFasting) / 2.0
+                if (dinnerPost != null && nextFasting != null) {
+                    val dinnerTime = slotTimestamp(dayStart, 6)
+                    val nextWakeTime = slotTimestamp(dayStart + dayMillis, 0)
+                    val fraction = ((timestamp - dinnerTime).toDouble() /
+                        (nextWakeTime - dinnerTime).toDouble()).coerceIn(0.0, 1.0)
+                    estimate = dinnerPost + (nextFasting - dinnerPost) * fraction
+                }
             }
-            if (estimate == null) estimate = globalFallback
-            slots.add(GlucoseDailySlot(timestamp, estimate, slot, true))
+
+            // No generic/global fallback: if personal evidence is insufficient,
+            // leave this slot absent rather than inventing a representative value.
+            if (estimate != null && estimate.isFinite() && estimate > 0.0) {
+                slots.add(GlucoseDailySlot(timestamp, estimate, slot, true))
+            }
         }
     }
-    if (slots.size != 720) return null
-    // Experimental recency decay: a 30-day half-life gives the latest 30 days
-    // more than half of the total weight across this 90-day window.
-    // Each of the eight daily representative slots contributes equally before
-    // the day-level recency weight is applied.
-    val weightedValues = slots.map { slot ->
-        val ageDays = ((windowEnd - slot.timestamp).coerceAtLeast(0L)).toDouble() / dayMillis.toDouble()
-        val recencyWeight = Math.pow(0.5, ageDays / 30.0)
-        slot.valueMgDl to recencyWeight
+    if (slots.isEmpty()) return null
+    val representedSlots = slots.groupBy { it.slotIndex }
+    if (representedSlots.keys.size < 4) return null
+
+    // Stratify by time-of-day first: each represented daily slot contributes
+    // equally, so a frequently measured fasting slot cannot dominate the day.
+    // Within each slot, recent days receive exponentially greater weight
+    // (30-day half-life) to reflect the stronger influence of recent glucose.
+    val slotMeans = representedSlots.values.map { slotReadings ->
+        val weighted = slotReadings.map { slot ->
+            val ageDays = ((windowEnd - slot.timestamp).coerceAtLeast(0L)).toDouble() / dayMillis
+            val weight = Math.pow(0.5, ageDays / 30.0)
+            slot.valueMgDl to weight
+        }
+        val weightSum = weighted.sumOf { it.second }
+        if (weightSum <= 0.0) return null
+        weighted.sumOf { it.first * it.second } / weightSum
     }
-    val totalWeight = weightedValues.sumOf { it.second }
-    if (totalWeight <= 0.0) return null
-    val weightedAverage = weightedValues.sumOf { it.first * it.second } / totalWeight
+    val stratifiedAverage = slotMeans.average()
+    val actualSlotCount = slots.count { !it.estimated }
+    val estimatedSlotCount = slots.count { it.estimated }
     val estimate = TimeWeightedGlucoseEstimate(
-        averageMgDl = weightedAverage,
-        estimatedA1cPercent = (weightedAverage + 46.7) / 28.7,
-        measurementCount = slots.size,
+        averageMgDl = stratifiedAverage,
+        estimatedA1cPercent = (stratifiedAverage + 46.7) / 28.7,
+        measurementCount = assignedWindowReadingIds.size,
         intervalCount = slots.size,
         coveredMillis = 90L * dayMillis,
-        firstTimestamp = slots.first().timestamp,
-        lastTimestamp = slots.last().timestamp
+        firstTimestamp = distinctActualTimes.first(),
+        lastTimestamp = distinctActualTimes.last(),
+        actualSlotCount = actualSlotCount,
+        estimatedSlotCount = estimatedSlotCount,
+        representedSlotCount = representedSlots.keys.size
     )
     return SlotBasedGlucoseEstimate(
         estimate = estimate,
         slots = slots,
-        actualSlotCount = slots.count { !it.estimated },
-        estimatedSlotCount = slots.count { it.estimated }
+        actualSlotCount = actualSlotCount,
+        estimatedSlotCount = estimatedSlotCount
     )
 }

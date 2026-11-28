@@ -205,6 +205,8 @@ class SlotBasedGlucoseEstimateTest {
         org.junit.Assert.assertEquals(720, result!!.slots.size)
         org.junit.Assert.assertEquals(719, result.actualSlotCount)
         org.junit.Assert.assertEquals(1, result.estimatedSlotCount)
+        org.junit.Assert.assertEquals(719, result.estimate.measurementCount)
+        org.junit.Assert.assertEquals(8, result.estimate.representedSlotCount)
         org.junit.Assert.assertEquals(140.0, result.slots[45 * 8 + 4].valueMgDl, 0.001)
         org.junit.Assert.assertTrue(result.slots.all { it.timestamp > 0L })
     }
@@ -230,6 +232,23 @@ class SlotBasedGlucoseEstimateTest {
         // A 30-day half-life makes the recent 30-day block contribute >50%.
         org.junit.Assert.assertTrue(result!!.estimate.averageMgDl > 150.0)
         org.junit.Assert.assertTrue(result.estimate.averageMgDl < 200.0)
+    }
+
+    @Test fun sparseSingleTimeOfDayDataDoesNotUseGlobalAverageForMissingSlots() {
+        val endDay = 1_750_000_000_000L
+        val calendar = java.util.Calendar.getInstance().apply {
+            timeInMillis = endDay
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            add(java.util.Calendar.DAY_OF_YEAR, -89)
+        }
+        val start = calendar.timeInMillis
+        val records = (0 until 90).map { day ->
+            VitalRecord("fasting-$day", "본인", "혈당", (100 + day % 20).toString(),
+                timestamp(start + day * dayMillis, 7), "Meter")
+        }
+        // One observed time slot cannot safely stand in for all eight daily periods.
+        org.junit.Assert.assertNull(calculateSlotBasedGlucoseEstimate(records, endOfDay(start + 89 * dayMillis)))
     }
 
     @Test fun actualReadingTakesPrecedenceOverHistoricalSlotAverage() {

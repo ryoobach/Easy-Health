@@ -58,3 +58,6 @@
 
 | 2026-11-28 | 1.58 TEST attempt 2 | `feature/v1.41-health-schedule-diary` | 실패 — 테스트 수정 후 재빌드 | CI run 46152126486. 서명키 복원 및 인증서 확인, Kotlin 컴파일까지 통과. 단위 테스트 15개 중 1개 실패(`intervalsLongerThanSixHoursAreNotCarriedForward`). 8시간 공백 구간은 제외되고 100 mg/dL 측정값의 다음 1시간만 유효하므로 기대값 200은 테스트 오류로 판단. APK 빌드 전 중단, 버전 미소비. 상세: `2026-11-28-v1.58-test-build-attempt2.md`. |
 | 2026-11-28 | 1.58 TEST | `feature/v1.41-health-schedule-diary` | **성공** | CI run 46152727484 성공. 단위 테스트 통과, APK 빌드, package/version(1.58/58), 기존 테스트 서명키 SHA-256 지문 검증 및 artifact 업로드 완료. Package `com.ryoo.easyhealth.test143`. Artifact `Easy-Health-1.58-Test` (15266169836, 17,675,027 bytes). 상세: `2026-11-28-v1.58-test-build.md`. 실기기 설치·화면 동작·데이터 보존은 사용자 확인 대기. |
+
+
+| 2026-11-28 | 1.59 TEST | `feature/v1.41-health-schedule-diary` | 빌드 준비 | 1.58의 8개 시간대 모델을 개선: 개인별 근거가 충분한 결측 슬롯만 보정하고 전 기간 전체 평균 fallback 제거, 시간대별 균등 집계, 30일 반감기, 실측 횟수와 보정 슬롯 수 분리. versionName 1.59 / versionCode 59 / package `com.ryoo.easyhealth.test143`. 기존 UI·기타 기능·데이터 저장 구조 및 테스트 서명키 유지. |
