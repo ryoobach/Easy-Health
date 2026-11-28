@@ -1188,7 +1188,7 @@ fun EasyHealthApp(context: Context) {
                         val dayTimeline = (dayAppointments.map { DayTimelineItem(normalizeScheduleDate(it.date), it.time, appointment = it) } +
                             dayEntries.map { DayTimelineItem(normalizeScheduleDate(it.date), it.time, entry = it) })
                             .sortedWith(compareBy<DayTimelineItem> { it.date }.thenBy { it.time })
-                        Text(if (showMonthRecords) "$selectedMonthKey월 전체 기록" else "${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(if (showMonthRecords) "${selectedMonthKey}월 전체 기록" else "${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         if (dayTimeline.isEmpty()) {
                             Text("이 날짜에는 아직 기록이 없습니다. 위에서 새 기록을 입력해 주세요.", color = Color.Gray, fontSize = 12.sp)
                         }
