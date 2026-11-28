@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material3.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -457,6 +458,8 @@ fun EasyHealthApp(context: Context) {
     var dailyEntryDeleteTarget by remember { mutableStateOf<DailyEntry?>(null) }
     var selectedAppointmentDate by remember { mutableStateOf(SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date())) }
     var showDateEntryActions by remember { mutableStateOf(false) }
+    var showMonthRecords by remember { mutableStateOf(false) }
+    var selectedMonthKey by remember { mutableStateOf("") }
     var appointmentInitialDate by remember { mutableStateOf<String?>(null) }
     var appointmentDeleteTarget by remember { mutableStateOf<HospitalAppointment?>(null) }
     var showRecordDialog by remember { mutableStateOf(false) }
@@ -843,7 +846,8 @@ fun EasyHealthApp(context: Context) {
     // 기록 탭과 리포트 탭은 동일한 90일 × 하루 8개 시간대 엔진을 공유합니다.
     val slotBasedA1c = calculateSlotBasedGlucoseEstimate(reportGlucoseRecords, a1cReferenceEnd, a1cSchedule)
     val timeWeightedA1cEstimate = slotBasedA1c?.estimate
-    val reportA1cPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (reportPeriod) {
+    val a1cReportPeriod = vitalReportPeriods["혈당"] ?: reportPeriod
+    val reportA1cPoints: List<Pair<String, TimeWeightedGlucoseEstimate?>> = when (a1cReportPeriod) {
         "1개월" -> (0..3).map { weekOffset ->
             val periodEnd = a1cReferenceEnd - weekOffset * 7L * 24L * 60L * 60L * 1000L
             val label = "~ " + SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(periodEnd))
@@ -1095,12 +1099,23 @@ fun EasyHealthApp(context: Context) {
                 "일정·일기" -> Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("일정 · 일기", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
                     Text("날짜를 선택하면 새 기록을 입력하고, 해당 날짜의 기록을 시간순으로 확인할 수 있습니다.", color = Color.Gray, fontSize = 13.sp)
-                    val markedDates = (appointments.map { normalizeScheduleDate(it.date) } + dailyEntries.map { normalizeScheduleDate(it.date) }).toSet()
+                    val appointmentDateCounts = appointments.map { normalizeScheduleDate(it.date) }.groupingBy { it }.eachCount()
+                    val healthDiaryDateCounts = dailyEntries.filter { it.kind == "건강 일기" }.map { normalizeScheduleDate(it.date) }.groupingBy { it }.eachCount()
+                    val memoDateCounts = dailyEntries.filter { it.kind != "건강 일기" }.map { normalizeScheduleDate(it.date) }.groupingBy { it }.eachCount()
                     HospitalCalendar(
                         selectedDate = selectedAppointmentDate,
-                        markedDates = markedDates,
+                        appointmentDateCounts = appointmentDateCounts,
+                        healthDiaryDateCounts = healthDiaryDateCounts,
+                        memoDateCounts = memoDateCounts,
+                        onMonthSelected = { year, month ->
+                            selectedMonthKey = String.format(Locale.KOREA, "%04d.%02d", year, month)
+                            selectedAppointmentDate = "$selectedMonthKey.01"
+                            showMonthRecords = true
+                            showDateEntryActions = false
+                        },
                         onDateSelected = {
                             selectedAppointmentDate = it
+                            showMonthRecords = false
                             showDateEntryActions = true
                             appointmentInitialDate = it
                             editingAppointment = null
@@ -1110,6 +1125,7 @@ fun EasyHealthApp(context: Context) {
                         },
                         onDateLongPressed = {
                             selectedAppointmentDate = it
+                            showMonthRecords = false
                             showDateEntryActions = true
                             appointmentInitialDate = it
                             editingAppointment = null
@@ -1120,7 +1136,8 @@ fun EasyHealthApp(context: Context) {
                             showDailyEntryDialog = true
                         }
                     )
-                    if (showDateEntryActions) {
+                    if (showDateEntryActions || showMonthRecords) {
+                        if (showDateEntryActions) {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF7F1)), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${selectedAppointmentDate} 새 기록 입력", color = Ink, fontWeight = FontWeight.Bold)
@@ -1158,12 +1175,20 @@ fun EasyHealthApp(context: Context) {
                                 }
                             }
                         }
-                        data class DayTimelineItem(val time: String, val appointment: HospitalAppointment? = null, val entry: DailyEntry? = null)
-                        val dayAppointments = appointments.filter { normalizeScheduleDate(it.date) == normalizeScheduleDate(selectedAppointmentDate) }
-                        val dayEntries = dailyEntries.filter { normalizeScheduleDate(it.date) == normalizeScheduleDate(selectedAppointmentDate) }
-                        val dayTimeline = (dayAppointments.map { DayTimelineItem(it.time, appointment = it) } +
-                            dayEntries.map { DayTimelineItem(it.time, entry = it) }).sortedBy { it.time }
-                        Text("${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        data class DayTimelineItem(val date: String, val time: String, val appointment: HospitalAppointment? = null, val entry: DailyEntry? = null)
+                        val dayAppointments = appointments.filter {
+                            val date = normalizeScheduleDate(it.date)
+                            if (showMonthRecords) date.startsWith(selectedMonthKey) else date == normalizeScheduleDate(selectedAppointmentDate)
+                        }
+                        val dayEntries = dailyEntries.filter {
+                            val date = normalizeScheduleDate(it.date)
+                            if (showMonthRecords) date.startsWith(selectedMonthKey) else date == normalizeScheduleDate(selectedAppointmentDate)
+                        }
+                        val dayTimeline = (dayAppointments.map { DayTimelineItem(normalizeScheduleDate(it.date), it.time, appointment = it) } +
+                            dayEntries.map { DayTimelineItem(normalizeScheduleDate(it.date), it.time, entry = it) })
+                            .sortedWith(compareBy<DayTimelineItem> { it.date }.thenBy { it.time })
+                        Text(if (showMonthRecords) "$selectedMonthKey월 전체 기록" else "${selectedAppointmentDate} 기록", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         if (dayTimeline.isEmpty()) {
                             Text("이 날짜에는 아직 기록이 없습니다. 위에서 새 기록을 입력해 주세요.", color = Color.Gray, fontSize = 12.sp)
                         }
@@ -1195,7 +1220,7 @@ fun EasyHealthApp(context: Context) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text("병원 예약", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             Spacer(Modifier.weight(1f))
-                                            Text(a.time, color = Color.Gray, fontSize = 11.sp)
+                                            Text(if (showMonthRecords) "${item.date} ${a.time}" else a.time, color = Color.Gray, fontSize = 11.sp)
                                         }
                                         Text(a.hospital, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(a.memo.ifBlank { "진료 내용 미입력" }, color = Color.Gray, fontSize = 12.sp)
@@ -1230,7 +1255,7 @@ fun EasyHealthApp(context: Context) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(entry.kind, color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             Spacer(Modifier.weight(1f))
-                                            Text(entry.time, color = Color.Gray, fontSize = 11.sp)
+                                            Text(if (showMonthRecords) "${item.date} ${entry.time}" else entry.time, color = Color.Gray, fontSize = 11.sp)
                                         }
                                         if (entry.title.isNotBlank()) Text(entry.title, color = Ink, fontWeight = FontWeight.SemiBold)
                                         Text(entry.body, color = Color.Gray, fontSize = 12.sp)
@@ -1253,6 +1278,7 @@ fun EasyHealthApp(context: Context) {
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     selectedAppointmentDate = recordDate
+                                    showMonthRecords = false
                                     showDateEntryActions = true
                                 },
                                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1275,21 +1301,6 @@ fun EasyHealthApp(context: Context) {
                     val reportVitalTypes = listOf("혈당", "혈압", "체온", "체중", "체지방률", "골격근량", "BMI", "호흡수", "산소포화도", "심전도", "케톤", "식사", "운동", "수면", "특이사항", "맥박").filter { reportEnabledTypes.contains(it) }
                     if (reportVitalTypes.isNotEmpty()) {
                     }
-                    Text("당화혈색소 추정치 기간", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    ScrollableTabRow(selectedTabIndex = listOf("1주일", "1개월", "3개월", "전체").indexOf(reportPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
-                        listOf("1주일", "1개월", "3개월", "전체").forEach { label ->
-                            Tab(selected = reportPeriod == label, onClick = {
-                                reportPeriod = label
-                                prefs.edit().putString("last_report_period", label).apply()
-                            }, text = { Text(label) })
-                        }
-                    }
-                    Text(when (reportPeriod) {
-                        "1주일" -> "현재부터 1주일 전까지"
-                        "1개월" -> "현재부터 1개월 전까지"
-                        "3개월" -> "현재부터 3개월 전까지"
-                        else -> "전체 기록 기준"
-                    }, color = Color.Gray, fontSize = 12.sp)
                     if (reportVitalTypes.isEmpty()) {
                         Text("등록된 기기의 측정 기록이 쌓이면 여기에 표시됩니다.", color = Color.Gray)
                     } else {
@@ -1311,7 +1322,6 @@ fun EasyHealthApp(context: Context) {
                             }
                             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(vital + " 측정 추이 · " + vitalPeriod + " · 총 " + vitalRows.size + "회", color = Ink, fontWeight = FontWeight.SemiBold)
                                     ScrollableTabRow(selectedTabIndex = listOf("1주일", "1개월", "3개월", "전체").indexOf(vitalPeriod).coerceAtLeast(0), containerColor = Color.Transparent, edgePadding = 0.dp) {
                                         listOf("1주일", "1개월", "3개월", "전체").forEach { label ->
                                             Tab(selected = vitalPeriod == label, onClick = { vitalReportPeriods[vital] = label }, text = { Text(label, fontSize = 11.sp) })
@@ -1373,6 +1383,7 @@ fun EasyHealthApp(context: Context) {
                                     }
                                 }
                             }
+                            Text("$vital 측정 추이 · 전체 총 ${if (vital == "혈당") reportGlucoseRecords.size else vitalRows.size}회", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             val numericValues = if (vital == "혈당") glucoseMeasurementGroups(vitalRows).map { it.average } else vitalRows.mapNotNull { it.value.toDoubleOrNull() }
                             val summaryCount = if (vital == "혈당") glucoseMeasurementGroups(vitalRows).size else vitalRows.size
                             Card(colors = CardDefaults.cardColors(containerColor = PaleGreen), shape = RoundedCornerShape(18.dp)) {
@@ -2287,7 +2298,15 @@ private fun RecordDialog(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onDateSelected: (String) -> Unit, onDateLongPressed: (String) -> Unit) {
+private fun HospitalCalendar(
+    selectedDate: String,
+    appointmentDateCounts: Map<String, Int>,
+    healthDiaryDateCounts: Map<String, Int>,
+    memoDateCounts: Map<String, Int>,
+    onMonthSelected: (Int, Int) -> Unit,
+    onDateSelected: (String) -> Unit,
+    onDateLongPressed: (String) -> Unit
+) {
     val monthCalendar = remember(selectedDate) {
         java.util.Calendar.getInstance().apply {
             try { time = SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).parse(selectedDate) ?: Date() } catch (_: Exception) { }
@@ -2308,7 +2327,9 @@ private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onD
                     displayedMonth = c.timeInMillis
                 }) { Text("‹", fontSize = 24.sp, color = Green) }
                 Spacer(Modifier.weight(1f))
-                Text(String.format(Locale.KOREA, "%04d년 %02d월", year, monthIndex + 1), color = Ink, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { onMonthSelected(year, monthIndex + 1) }) {
+                    Text(String.format(Locale.KOREA, "%04d년 %02d월", year, monthIndex + 1), color = Ink, fontWeight = FontWeight.Bold)
+                }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
                     val c = java.util.Calendar.getInstance().apply { timeInMillis = displayedMonth; add(java.util.Calendar.MONTH, 1) }
@@ -2328,21 +2349,28 @@ private fun HospitalCalendar(selectedDate: String, markedDates: Set<String>, onD
                         val dayNumber = week * 7 + weekday - firstDayOffset + 1
                         if (dayNumber in 1..daysInMonth) {
                             val date = String.format(Locale.KOREA, "%04d.%02d.%02d", year, monthIndex + 1, dayNumber)
-                            val marked = date in markedDates
+                            val appointmentCount = appointmentDateCounts[date] ?: 0
+                            val healthDiaryCount = healthDiaryDateCounts[date] ?: 0
+                            val memoCount = memoDateCounts[date] ?: 0
+                            val marked = appointmentCount + healthDiaryCount + memoCount > 0
                             val selected = date == selectedDate
                             Box(Modifier.weight(1f).aspectRatio(1f).padding(2.dp)
                                 .background(when { selected -> Color(0xFFB7DCC2); marked -> Color(0xFFE5F2E8); else -> Color.Transparent }, RoundedCornerShape(9.dp))
                                 .combinedClickable(onClick = { onDateSelected(date) }, onLongClick = { onDateLongPressed(date) }), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text(dayNumber.toString(), color = if (weekday == 6) Color(0xFFD16B6B) else Ink, fontSize = 12.sp, fontWeight = if (selected || marked) FontWeight.Bold else FontWeight.Normal)
-                                    if (marked) Box(Modifier.size(4.dp).background(Green, RoundedCornerShape(50)))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        repeat(appointmentCount) { Box(Modifier.size(4.dp).background(Color(0xFFD32F2F), RoundedCornerShape(50))) }
+                                        repeat(healthDiaryCount) { Box(Modifier.size(4.dp).background(Color(0xFF2E9D58), RoundedCornerShape(50))) }
+                                        repeat(memoCount) { Box(Modifier.size(4.dp).background(Color(0xFF2878C8), RoundedCornerShape(50))) }
+                                    }
                                 }
                             }
                         } else Spacer(Modifier.weight(1f).aspectRatio(1f))
                     }
                 }
             }
-            Text("날짜를 누르면 새 기록 입력 메뉴가 열립니다. 연한 초록색은 기록이 있는 날입니다.", color = Color.Gray, fontSize = 10.sp)
+            Text("빨강은 병원 예약, 초록은 건강 일기, 파랑은 간단 메모입니다. 날짜를 누르면 기록을 확인하고, 월 제목을 누르면 해당 월 전체 기록을 시간순으로 봅니다.", color = Color.Gray, fontSize = 10.sp)
         }
     }
 }
@@ -2498,6 +2526,7 @@ private fun ScheduleEntryDialog(
     onDeleteDailyEntry: (DailyEntry) -> Unit
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     fun normalizeKind(value: String): String = when (value) {
         "병원예약", "병원 예약" -> "병원예약"
         "건강일기", "건강 일기" -> "건강일기"
@@ -2595,13 +2624,13 @@ private fun ScheduleEntryDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     OutlinedTextField(value = date, onValueChange = { date = it }, label = null, singleLine = true,
-                        modifier = Modifier.weight(1.35f).height(42.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        modifier = Modifier.weight(1.35f).height(50.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
                         placeholder = { Text("년.월.일", fontSize = 12.sp) })
                     IconButton(onClick = { showDatePicker() }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.DateRange, contentDescription = "날짜 선택", tint = Green, modifier = Modifier.size(20.dp))
                     }
                     OutlinedTextField(value = time, onValueChange = { time = it }, label = null, singleLine = true,
-                        modifier = Modifier.weight(0.90f).height(42.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        modifier = Modifier.weight(0.90f).height(50.dp), textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
                         placeholder = { Text("시:분", fontSize = 12.sp) })
                     IconButton(onClick = { showTimePicker() }, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.AccessTime, contentDescription = "시간 선택", tint = Green, modifier = Modifier.size(20.dp))
@@ -2614,16 +2643,17 @@ private fun ScheduleEntryDialog(
                     placeholder = { Text(if (entryKind == "병원예약") "병원명" else "제목 (선택)", fontSize = 12.sp) },
                     singleLine = true,
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
-                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
                 )
                 OutlinedTextField(
                     value = body,
                     onValueChange = { body = it },
                     label = { Text(when (entryKind) { "병원예약" -> "진료 내용 / 메모"; "건강일기" -> "오늘의 건강 일기"; else -> "메모 내용" }) },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 4
+                    minLines = 3,
+                    maxLines = 5
                 )
+                Spacer(Modifier.fillMaxWidth().height(12.dp).clickable { focusManager.clearFocus() })
                 if (entryKind == "건강일기") {
                     Text("건강 일기는 알림 없이 기록됩니다.", color = Color.Gray, fontSize = 11.sp)
                 } else {
