@@ -144,7 +144,9 @@ class GlucoseTimeWeightedAverageTest {
     @Test fun intervalsLongerThanSixHoursAreNotCarriedForward() {
         val result = estimate(listOf(reading("250", 0), reading("100", 8 * hour), reading("200", 9 * hour)))
         assertNotNull(result)
-        assertEquals(200.0, result!!.averageMgDl, 0.0001)
+        // Only the 100 mg/dL reading has a valid one-hour interval to the next
+        // sample. The eight-hour interval and final unbounded sample are excluded.
+        assertEquals(100.0, result!!.averageMgDl, 0.0001)
         assertEquals(hour, result.coveredMillis)
     }
 
@@ -205,6 +207,29 @@ class SlotBasedGlucoseEstimateTest {
         org.junit.Assert.assertEquals(1, result.estimatedSlotCount)
         org.junit.Assert.assertEquals(140.0, result.slots[45 * 8 + 4].valueMgDl, 0.001)
         org.junit.Assert.assertTrue(result.slots.all { it.timestamp > 0L })
+    }
+
+    @Test fun latestThirtyDaysReceiveMoreThanHalfOfTheNinetyDayWeight() {
+        val endDay = 1_750_000_000_000L
+        val calendar = java.util.Calendar.getInstance().apply {
+            timeInMillis = endDay
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            add(java.util.Calendar.DAY_OF_YEAR, -89)
+        }
+        val start = calendar.timeInMillis
+        val records = mutableListOf<VitalRecord>()
+        for (day in 0 until 90) {
+            val value = if (day < 60) "100" else "200"
+            scheduleSlots(start + day * dayMillis).forEachIndexed { slot, at ->
+                records.add(VitalRecord("decay-$day-$slot", "본인", "혈당", value, at, "Meter"))
+            }
+        }
+        val result = calculateSlotBasedGlucoseEstimate(records, endOfDay(start + 89 * dayMillis))
+        org.junit.Assert.assertNotNull(result)
+        // A 30-day half-life makes the recent 30-day block contribute >50%.
+        org.junit.Assert.assertTrue(result!!.estimate.averageMgDl > 150.0)
+        org.junit.Assert.assertTrue(result.estimate.averageMgDl < 200.0)
     }
 
     @Test fun actualReadingTakesPrecedenceOverHistoricalSlotAverage() {
