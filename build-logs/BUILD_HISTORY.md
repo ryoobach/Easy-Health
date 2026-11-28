@@ -53,3 +53,5 @@
 | 2026-11-28 | 1.56 TEST | `feature/v1.41-health-schedule-diary` | **성공** | CI run 46148001851 성공. 최초 실행 46147838713은 `selectedMonthKey월` Kotlin 문자열 보간 오류로 실패했으며, `${selectedMonthKey}월`로 수정 후 동일 버전 1.56 재빌드. 단위 테스트, APK 빌드, package/version(1.56/56), 기존 테스트 서명키 지문, artifact 업로드 모두 통과. Artifact `Easy-Health-1.56-Test` (15264317945, 17,675,021 bytes). Package `com.ryoo.easyhealth.test143`. 실기기 설치·화면 동작은 사용자 확인 대기. 상세: [2026-11-28-v1.56-test-build.md](2026-11-28-v1.56-test-build.md). |
 
 | 2026-11-28 | 1.58 TEST | `feature/v1.41-health-schedule-diary` | 빌드 진행 | 사용자 지정 버전. 당화혈색소만 실제 혈당 실측값의 다음 측정까지 경과시간으로 가중 평균을 구하도록 변경. 6시간 초과 공백과 마지막 측정 이후 시간은 제외. ADAG 환산식 유지. 기록·리포트 공통 함수 사용. versionName 1.58 / versionCode 58. |
+
+| 2026-11-28 | 1.58 TEST attempt 1 | `feature/v1.41-health-schedule-diary` | 실패 — 재시도 | CI run 46152045650. 기존 테스트 서명키 복원은 성공했으나 workflow의 SHA256 grep이 SHA258로 오기되어 서명 인증서 확인 단계에서 종료. Gradle/단위 테스트/APK 빌드는 시작하지 않아 버전 미소비. 상세: `2026-11-28-v1.58-test-build-attempt1.md`. |
