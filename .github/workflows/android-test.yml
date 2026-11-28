@@ -47,7 +47,7 @@ jobs:
           exit 1
       - name: Record test signing certificate
         run: |
-          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA258:'
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E 'SHA256:'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
